@@ -1,0 +1,9 @@
+target/
+out/
+data/
+*.class
+*.jar
+*.ser
+.idea/
+*.iml
+.vscode/

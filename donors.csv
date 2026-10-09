@@ -1,0 +1,5 @@
+id,name,phone,email,address,donorType,createdAt
+DON-0001,Boys Hostel Mess,9876543210,mess@campus.edu,"North Block, Campus",HOSTEL_MESS,2026-10-05T07:04:07
+DON-0002,Central Canteen,9876543211,,"Admin Block, Campus",CANTEEN,2026-10-05T07:04:07
+DON-0003,Tech Fest Committee,9876543212,,"Auditorium, Campus",EVENT_COORDINATOR,2026-10-05T07:04:07
+DON-0004,benee,9896755555,,kodaly,HOSTEL_MESS,2026-10-05T07:08:27

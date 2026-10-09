@@ -1,0 +1,17 @@
+metric,value
+generatedAt,2026-10-05T07:28:51
+donors,4
+recipients,5
+batches,6
+servingsDonated,350
+servingsDelivered,110
+servingsInTransit,240
+servingsAvailable,0
+servingsWasted,0
+deliveryRatePercent,31.4
+foodSavedKg,38.5
+co2AvoidedKg,96.3
+recipientsServed,2
+topDonor:Tech Fest Committee,110
+topRecipient:Asha Bhavan Orphanage,60
+topRecipient:Community Kitchen Trust,50
