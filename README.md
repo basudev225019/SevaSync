@@ -1,103 +1,249 @@
-# SevaSync – Campus Food Surplus & Waste Redistribution (pure Java backend)
+# SevaSync – Campus Food Surplus & Waste Redistribution Platform
 
-Hostel messes, canteens and event teams log surplus food → the system **validates freshness** →
-a **priority engine** matches the soonest-expiring food with the most urgent recipients →
-volunteers deliver → every step lands in a **tamper-evident audit trail**.
+[![Java](https://img.shields.io/badge/Java-17%2B-ED8B00?logo=openjdk&logoColor=white)](https://openjdk.org/)
+[![Database](https://img.shields.io/badge/Database-SQLite-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
+[![Frontend](https://img.shields.io/badge/Frontend-React%20%2B%20Vite-61DAFB?logo=react&logoColor=black)](https://react.dev/)
+[![Tests](https://img.shields.io/badge/Tests-34%20Passing-10b981)](https://junit.org/junit5/)
 
-* **100 % Java, JDK 17+**, zero runtime dependencies (JUnit is used for tests only).
-* Two front doors on the same core: an interactive **console** (as in the project plan) and a **REST/JSON API**
-  built on the JDK's own `com.sun.net.httpserver`.
-* Persistence is flat CSV through `BufferedReader` / `BufferedWriter`, written atomically (temp file + move).
+> **Zero Campus Food Waste Initiative**: Hostel messes, cafeterias, and event committees log surplus food → the system validates freshness rules → a double `PriorityQueue` matching engine pairs soonest-expiring food with the highest-urgency recipient shelters → volunteers deliver meals → every action is recorded in a tamper-evident cryptographic SHA-256 audit log.
 
-## Run it
+---
+
+## Architecture Overview
+
+SevaSync is structured as a clean full-stack monorepo:
+
+```
+SevaSync/
+├── backend/                             # Pure Java 17+ Backend with SQLite
+│   ├── pom.xml                          # Maven build with SQLite JDBC & shaded JAR
+│   ├── src/
+│   │   ├── main/
+│   │   │   ├── java/com/sevasync/
+│   │   │   │   ├── api/                 # REST API server (CORS-enabled, zero framework)
+│   │   │   │   ├── cli/                 # Interactive terminal console UI
+│   │   │   │   ├── contract/            # Domain entity contracts
+│   │   │   │   ├── database/            # SQLite DatabaseManager, schema migrator
+│   │   │   │   ├── exception/           # Domain exceptions
+│   │   │   │   ├── model/               # Donor, Recipient, FoodBatch, Dispatch, Enums
+│   │   │   │   ├── service/             # Matching, Donation, Dispatch, Impact, ExpiryMonitor
+│   │   │   │   ├── storage/             # SQLite Repositories, AuditLogger, BackupService
+│   │   │   │   ├── util/                # Json, TimeUtil, InputSanitizer
+│   │   │   │   ├── validation/          # Freshness & safety rules
+│   │   │   │   ├── DemoData.java        # Campus sample data seeder
+│   │   │   │   ├── SevaSyncApp.java     # Application entrypoint (serve or cli)
+│   │   │   │   └── SevaSyncSystem.java  # Dependency wiring & lifecycle management
+│   │   │   └── resources/
+│   │   │       └── schema.sql           # SQLite DDL database schema
+│   │   └── test/
+│   │       └── java/com/sevasync/       # 34 comprehensive JUnit 5 tests
+│   └── data/                            # SQLite database storage (sevasync.db)
+│
+├── frontend/                            # Modern React + Vite Application
+│   ├── package.json
+│   ├── vite.config.ts                   # Proxies /api -> http://127.0.0.1:8080
+│   ├── index.html
+│   ├── src/
+│   │   ├── components/                  # Navbar, StatCard, Modals
+│   │   ├── pages/                       # Dashboard, Batches, Matching, Dispatches, Partners, Impact, Audit
+│   │   ├── services/                    # Typed API client
+│   │   ├── types/                       # TypeScript models
+│   │   ├── index.css                    # Rich dark-mode glassmorphism design system
+│   │   ├── App.tsx                      # Top-level state and routing
+│   │   └── main.tsx
+│
+└── README.md
+```
+
+---
+
+## Getting Started
+
+### Prerequisites
+- **JDK 17 or higher** (OpenJDK 17, 21, 26+)
+- **Node.js 18+** and **npm**
+
+---
+
+### 1. Run the Java Backend (SQLite Database)
+
+Navigate to the `backend/` directory:
 
 ```bash
-./build.sh                                   # plain javac + jar, no Maven needed
-java -jar target/sevasync.jar --demo         # console with sample data
-java -jar target/sevasync.jar serve --demo   # REST API on http://127.0.0.1:8080/api
+cd backend
 ```
-With Maven: `mvn test` (needs internet once, to fetch JUnit) and `mvn package`.
 
-Options: `--data DIR` (default `./data`), `--port N`, `--host H` (default `127.0.0.1`; use `0.0.0.0` to expose),
-`--api-key KEY` or env `SEVASYNC_API_KEY` (then every call except `/api/health` needs header `X-API-Key`).
+#### Run All 34 Tests:
+```bash
+mvn test
+```
 
-## Project layout and who owns what (matches the presentation)
+#### Build the Standalone Executable JAR:
+```bash
+mvn package -DskipTests
+```
 
-| Package | Contents | Group member |
+#### Start the REST API Server with Demo Data:
+```bash
+java -jar target/sevasync.jar serve --demo
+```
+* **Host & Port**: Listening on `http://127.0.0.1:8080/api`
+* **Database**: Automatically provisions SQLite at `backend/data/sevasync.db` with WAL mode enabled.
+* **CLI Options**:
+  - `serve`: Starts HTTP API server
+  - `cli`: Starts interactive terminal UI
+  - `--data DIR`: Database directory (default: `./data`)
+  - `--port N`: HTTP port (default: `8080`)
+  - `--demo`: Seeds sample campus donors, shelters, and food batches
+
+---
+
+### 2. Run the React + Vite Frontend
+
+In a separate terminal, navigate to the `frontend/` directory:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open **`http://localhost:5173`** in your browser.
+
+The frontend includes:
+- **Interactive Dashboard**: Live KPIs, freshness countdown timers, and quick action controls.
+- **Surplus Food Batches**: Real-time batch table with category limits, remaining shelf-life bars, and intake modal.
+- **Smart Matching Engine**: Visual double `PriorityQueue` simulation (dry run) and one-click execution.
+- **Dispatch Tracker**: Lifecycle tracking (`ASSIGNED` → `DELIVERED` or `CANCELLED`).
+- **Partner Registry**: Donors and recipient shelters with live capacity utilization meters.
+- **Impact & ESG Report**: Food waste saved (kg), CO₂e avoided (kg), and mess leaderboards.
+- **Tamper-Evident Audit Trail**: Live SHA-256 hash-chain viewer with single-click cryptographic verification.
+
+---
+
+## SQLite Database Schema
+
+The backend uses SQLite (`sevasync.db`) configured with foreign keys and Write-Ahead Logging (`WAL`):
+
+```sql
+-- Food Donors
+CREATE TABLE donors (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    email TEXT,
+    address TEXT,
+    donor_type TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+-- Recipient Organizations
+CREATE TABLE recipients (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    email TEXT,
+    address TEXT,
+    recipient_type TEXT NOT NULL,
+    need_level TEXT NOT NULL,
+    daily_capacity INTEGER NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+-- Food Surplus Batches
+CREATE TABLE food_batches (
+    id TEXT PRIMARY KEY,
+    donor_id TEXT NOT NULL,
+    food_name TEXT NOT NULL,
+    category TEXT NOT NULL,
+    vegetarian INTEGER NOT NULL DEFAULT 0,
+    servings INTEGER NOT NULL,
+    remaining_servings INTEGER NOT NULL,
+    prepared_at TEXT NOT NULL,
+    shelf_life_minutes INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (donor_id) REFERENCES donors(id) ON DELETE CASCADE
+);
+
+-- Volunteer Dispatches
+CREATE TABLE dispatches (
+    id TEXT PRIMARY KEY,
+    batch_id TEXT NOT NULL,
+    recipient_id TEXT NOT NULL,
+    servings INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    assigned_at TEXT NOT NULL,
+    delivered_at TEXT,
+    volunteer_name TEXT,
+    note TEXT,
+    FOREIGN KEY (batch_id) REFERENCES food_batches(id) ON DELETE CASCADE,
+    FOREIGN KEY (recipient_id) REFERENCES recipients(id) ON DELETE CASCADE
+);
+
+-- Tamper-Evident SHA-256 Audit Trail
+CREATE TABLE audit_log (
+    seq INTEGER PRIMARY KEY,
+    timestamp TEXT NOT NULL,
+    action TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    details TEXT,
+    prev_hash TEXT NOT NULL,
+    hash TEXT NOT NULL
+);
+```
+
+---
+
+## How Smart Matching Works
+
+1. **Eligible Batches Queue**: Surplus batches (`AVAILABLE` with $\ge 10$ minutes remaining shelf life) enter a `PriorityQueue` sorted by **earliest expiry first**.
+2. **Recipient Slots Queue**: Registered beneficiaries with remaining daily capacity enter a second `PriorityQueue` sorted by **need urgency** (`CRITICAL` > `HIGH` > `NORMAL`), then by remaining capacity.
+3. **Greedy Allocation**: The engine assigns the soonest-expiring batch to the highest-urgency recipient. If the recipient fills up, the batch is split over the next recipient.
+4. **Algorithmic Complexity**: $\mathcal{O}((B + R + A) \log (B + R))$ where $B$ = batches, $R$ = recipients, $A$ = allocations.
+
+---
+
+## Safety & Freshness Rules (`SafetyValidator`)
+
+* **Category Shelf-Life Thresholds**:
+  - `COOKED_MEAL`: Max 4 hours
+  - `BEVERAGE`: Max 8 hours
+  - `BAKERY`: Max 12 hours
+  - `FRUIT_VEGETABLE`: Max 24 hours
+  - `PACKAGED`: Max 48 hours
+* **Minimum Window**: Food batches submitted with $< 30$ minutes of remaining shelf life are rejected.
+* **Background Expiry Daemon**: `ExpiryMonitor` runs every 60s to expire overdue batches and cancel undelivered dispatches.
+* **Delivery Guard**: Delivery hand-over is refused if the batch expired in transit.
+
+---
+
+## REST API Reference
+
+| Method | Endpoint | Description |
 |---|---|---|
-| `model`, `contract` | `User` (abstract) → `Donor`, `Recipient`; `FoodBatch`, `Dispatch`; enums; `Entity` interface | **Member 1** – domain models & architecture |
-| `service.MatchingService` | two `PriorityQueue`s + custom `Comparator`s, `LinkedList`, `HashMap` | **Member 2** – priority & matching |
-| `validation.SafetyValidator`, `exception`, `util.InputSanitizer` | freshness rules, custom exceptions, input sanitising | **Member 3** – validation & error handling |
-| `storage`, `service.ImpactReportService`, `cli.ConsoleUI` | CSV I/O, audit log, backup, report, menu state machine | **Member 4** – persistence & CLI |
-| `api`, `service.ExpiryMonitor`, `SevaSyncSystem` | REST layer, background thread, wiring | shared / extra |
+| `GET` | `/api/health` | Service health status |
+| `GET` | `/api/donors` | List all food donors |
+| `POST` | `/api/donors` | Register a new food donor |
+| `GET` | `/api/donors/{id}` | Get donor details |
+| `GET` | `/api/recipients` | List recipients (+ remaining daily capacity) |
+| `POST` | `/api/recipients` | Register a new recipient beneficiary |
+| `GET` | `/api/recipients/{id}` | Get recipient details |
+| `GET` | `/api/batches[?status=AVAILABLE]` | List surplus batches |
+| `POST` | `/api/batches` | Log a surplus food batch |
+| `GET` | `/api/batches/{id}` | Get batch details |
+| `POST` | `/api/matching/preview` | Dry-run matching simulation |
+| `POST` | `/api/matching/run` | Execute priority matching & persist dispatches |
+| `GET` | `/api/dispatches[?status=ASSIGNED]` | List dispatches |
+| `POST` | `/api/dispatches/{id}/deliver` | Confirm volunteer delivery (`{"volunteer": "..."}`) |
+| `POST` | `/api/dispatches/{id}/cancel` | Cancel dispatch (`{"reason": "..."}`) |
+| `GET` | `/api/reports/impact` | Aggregate environmental & social figures |
+| `GET` | `/api/audit[?limit=50]` | Read cryptographic audit log rows |
+| `GET` | `/api/audit/verify` | Verify cryptographic hash chain integrity |
+| `POST` | `/api/demo` | Seed realistic campus demo data |
 
-Layering: `cli` / `api` → `service` → `storage` (`CsvRepository`) → files. Services never touch files directly.
+---
 
-## How matching works
-
-1. Eligible batches (`AVAILABLE`, ≥ 10 min of shelf-life left) go into a `PriorityQueue` ordered by **expiry time**, soonest first.
-2. Recipients with free capacity today go into a second `PriorityQueue` ordered by **need level** (`CRITICAL` > `HIGH` > `NORMAL`), then by free capacity.
-3. Take the most urgent batch, give it to the neediest recipient; if the recipient fills up, split the batch over the next one.
-   Recipients with spare capacity go back into the queue.
-4. Result: `Dispatch` rows (`ASSIGNED`). `preview` shows this without saving. Complexity O((B+R+A) log(B+R)).
-
-## Safety rules (`SafetyValidator`)
-
-* Max consumption window per category: cooked meal 4 h, beverage 8 h, bakery 12 h, fruit/veg 24 h, packaged 48 h → `UnsafeFoodException`.
-* Already expired → `ExpiredBatchException`; fewer than 30 min left when logged → `UnsafeFoodException`.
-* Servings 1–5000, preparation time not in the future → `InvalidInputException`.
-* Delivery is refused if the batch expired meanwhile: dispatch is cancelled, servings counted as wasted.
-* A background thread (`ExpiryMonitor`, every 60 s) expires overdue batches automatically.
-* Recipient daily capacity is enforced → `CapacityExceededException`.
-
-## Audit trail
-
-`audit_log.csv` is append-only. Each row stores the SHA-256 of its content **plus the previous row's hash**, so editing,
-deleting or re-ordering any row is detected by *Reports → Verify audit trail* / `GET /api/audit/verify`.
-(It is tamper-*evident*, not tamper-proof – someone with file access could rebuild the whole chain.)
-
-## REST API
-
-| Method & path | Purpose |
-|---|---|
-| `GET /api/health` | liveness |
-| `GET/POST /api/donors`, `GET /api/donors/{id}` | donors |
-| `GET/POST /api/recipients`, `GET /api/recipients/{id}` | recipients (+ `remainingCapacityToday`) |
-| `GET/POST /api/batches[?status=AVAILABLE]`, `GET /api/batches/{id}` | surplus batches |
-| `POST /api/matching/preview`, `POST /api/matching/run` | matching engine |
-| `GET/POST /api/dispatches[?status=ASSIGNED]` | list / manual assignment |
-| `POST /api/dispatches/{id}/deliver` `{"volunteer":"Ravi"}` · `/cancel` `{"reason":"..."}` | dispatch lifecycle |
-| `GET /api/reports/impact` | servings, kg saved, CO₂e (estimate), top donors/recipients |
-| `GET /api/audit[?limit=50]`, `GET /api/audit/verify` | audit trail |
-
-Errors are JSON `{"error": "...", "type": "ExpiredBatchException"}` with 400 (bad input), 401, 404, 405, 409 (capacity), 422 (unsafe/expired).
-
-```bash
-curl -X POST localhost:8080/api/donors -d '{"name":"Boys Hostel Mess","phone":"9876543210","donorType":"HOSTEL_MESS"}'
-curl -X POST localhost:8080/api/batches -d '{"donorId":"DON-0001","foodName":"Veg Biryani","category":"COOKED_MEAL","vegetarian":true,"servings":80,"shelfLifeHours":3}'
-curl -X POST localhost:8080/api/matching/run
-```
-
-## Data files (`data/`)
-
-`donors.csv`, `recipients.csv`, `batches.csv`, `dispatches.csv`, `audit_log.csv` (+ optional `backup.ser`, `impact_report.csv`).
-Every save rewrites the file atomically – perfectly fine for campus scale, not for millions of rows.
-
-## Syllabus coverage
-
-| Syllabus topic | Where |
-|---|---|
-| Module I – data types, operators, control flow, arrays/strings, console I/O, `PrintWriter` | everywhere; `cli.ConsoleUI` |
-| Module II – classes, constructors, static/final, inner classes, command-line args, inheritance, `super`/`this`, abstract classes, overriding | `model.*`, `SevaSyncApp.main(args)`, `User.getRole()`, `describe()` overrides, nested `Slot`/records |
-| Module III – packages, interfaces, exception handling (checked/unchecked, multi-catch, `finally`, `throws`), object streams & serialization, files | `contract.Entity`, `exception.*`, `storage.BackupService`, `storage.FileStorageManager` |
-| Module III – multithreading (thread model, creating threads, synchronisation, stopping threads) | `service.ExpiryMonitor`, `ReentrantLock` in all services, `synchronized` repositories, API thread pool |
-| Module IV – JUnit | `src/test/java` (34 tests) |
-| Module IV – Swing GUI, JDBC/MySQL | **not used**: the project plan specifies CSV storage and a CLI. The repository layer is the single place to swap in JDBC; a Swing front-end would call the same services. |
-| Self study – GitHub | `git init && git add . && git commit -m "SevaSync backend" && git remote add origin <url> && git push -u origin main` |
-
-## Known limits / next steps
-
-* No user login or roles beyond the optional shared API key – add real authentication before exposing it publicly.
-* Matching is greedy (a good heuristic, not a global optimum) and ignores travel distance and dietary preferences.
-* CO₂e figures use rough planning constants in `ImpactReportService`; change them to your own data.
-* Single-process only: the lock is in memory, so do not run two instances on the same `data/` folder.
+## License & Attribution
+Developed for campus food surplus management and sustainability accountability.

@@ -1,9 +1,35 @@
+# Build targets & packages
 target/
+backend/target/
 out/
+backend/out/
+dist/
+frontend/dist/
+
+# Node & Frontend dependencies
+node_modules/
+frontend/node_modules/
+*.tsbuildinfo
+frontend/.oxlintrc.json
+
+# Databases & local data
 data/
+backend/data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.ser
+*.csv
+
+# Java compiled & archives
 *.class
 *.jar
-*.ser
+*.war
+
+# IDE files
 .idea/
 *.iml
 .vscode/
+.DS_Store
+Thumbs.db

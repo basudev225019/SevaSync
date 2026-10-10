@@ -1,6 +1,0 @@
-id,name,phone,email,address,recipientType,needLevel,dailyCapacity,createdAt
-REC-0001,Asha Bhavan Orphanage,9812345670,,Church Road,ORPHANAGE,CRITICAL,60,2026-10-05T07:04:07
-REC-0002,Sneha Old Age Home,9812345671,,Market Street,OLD_AGE_HOME,HIGH,50,2026-10-05T07:04:07
-REC-0003,Railway Night Shelter,9812345672,,Station Road,SHELTER,HIGH,80,2026-10-05T07:04:07
-REC-0004,Community Kitchen Trust,9812345673,,Temple Lane,COMMUNITY_KITCHEN,NORMAL,100,2026-10-05T07:04:07
-REC-0005,community care centre,9994554999,,dgj,ORPHANAGE,NORMAL,100,2026-10-05T07:16:39
