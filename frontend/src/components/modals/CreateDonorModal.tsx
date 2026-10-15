@@ -40,7 +40,7 @@ export function CreateDonorModal({ open, onClose }: { open: boolean; onClose: ()
       width="lg"
       footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button loading={create.isPending} onClick={() => create.mutate()}>Create kitchen</Button></>}
     >
-      <div className="grid gap-5 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
         <div className="space-y-3.5">
           <Input label="Kitchen name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Central Canteen" />
           <Select label="Kind" value={donorType} onChange={(e) => setDonorType(e.target.value as DonorType)}>

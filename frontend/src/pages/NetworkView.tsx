@@ -20,7 +20,8 @@ export default function NetworkView() {
   const network = useQuery({ queryKey: ['network', 'full'], queryFn: api.network, refetchInterval: 10_000 });
   const [selected, setSelected] = useState<Selection>(null);
   const [focusMine, setFocusMine] = useState(false);
-  const [labels, setLabels] = useState(true);
+  // names on by default only where there is room for them; the Labels button toggles them anywhere
+  const [labels, setLabels] = useState(() => typeof window === 'undefined' || window.innerWidth >= 1024);
   const n = network.data;
   const canFocus = user && user.role !== 'ADMIN';
 
@@ -40,16 +41,18 @@ export default function NetworkView() {
       )}
 
       {/* header + legend */}
-      <div className="pointer-events-none absolute left-4 top-4 max-w-sm sm:left-6 sm:top-6">
+      <div className="pointer-events-none absolute left-4 right-4 top-4 sm:left-6 sm:right-auto sm:top-6 sm:max-w-sm">
         <h1 className="font-display text-2xl font-semibold tracking-tight">Live network</h1>
-        <p className="mt-1 text-sm text-ink-400">Drag to orbit, scroll to zoom, click anything for details.</p>
+        <p className="mt-1 text-sm text-ink-400">Drag to orbit, pinch or scroll to zoom, tap anything for details.</p>
         <div className="pointer-events-auto mt-4 flex flex-wrap gap-2">
           <Legend color={roleColor.DONOR} label="Kitchens" />
           <Legend color={roleColor.RECIPIENT} label="Recipients" />
           <Legend color={roleColor.VOLUNTEER} label="Volunteers" />
           <Legend color={dispatchColor.ASSIGNED} label="Awaiting volunteer" dashed />
-          <Legend color="#34d399" label="Recently delivered" />
+          <Legend color="#1f9d55" label="Recently delivered" />
         </div>
+        {/* on phones the counters sit under the legend instead of on top of it */}
+        {n && <Counters n={n} className="mt-3 sm:hidden" />}
       </div>
 
       {/* controls + counters */}
@@ -60,7 +63,7 @@ export default function NetworkView() {
           )}
           <ToolButton active={labels} onClick={() => setLabels((l) => !l)} icon={<Layers className="size-4" />} label="Labels" />
         </div>
-        {n && <Counters n={n} />}
+        {n && <Counters n={n} className="hidden sm:grid" />}
       </div>
 
       {/* details of the selection */}
@@ -73,7 +76,7 @@ export default function NetworkView() {
             exit={{ opacity: 0, x: -20 }}
             className="glass-strong absolute bottom-4 left-4 w-[min(360px,calc(100vw-32px))] rounded-3xl p-5 sm:bottom-6 sm:left-6"
           >
-            <button onClick={() => setSelected(null)} className="absolute right-3 top-3 grid size-8 place-items-center rounded-xl text-ink-400 hover:bg-white/5" aria-label="Close details">
+            <button onClick={() => setSelected(null)} className="absolute right-3 top-3 grid size-8 place-items-center rounded-xl text-ink-400 hover:bg-wash/5" aria-label="Close details">
               <X className="size-4" />
             </button>
             <SelectionDetails n={n} s={selected} />
@@ -104,19 +107,19 @@ function ToolButton({ active, onClick, icon, label }: { active: boolean; onClick
     <button
       onClick={onClick}
       aria-pressed={active}
-      className={clsx('flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition', active ? 'bg-white/10 text-ink-100' : 'text-ink-400 hover:text-ink-200')}
+      className={clsx('flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition', active ? 'bg-wash/10 text-ink-100' : 'text-ink-400 hover:text-ink-200')}
     >
       {icon} {label}
     </button>
   );
 }
 
-function Counters({ n }: { n: Network }) {
+function Counters({ n, className }: { n: Network; className?: string }) {
   const moving = n.routes.filter((r) => r.status === 'CLAIMED' || r.status === 'PICKED_UP').length;
   const waiting = n.routes.filter((r) => r.status === 'ASSIGNED').length;
   const servings = n.batches.reduce((s, b) => s + b.remainingServings, 0);
   return (
-    <div className="glass grid grid-cols-3 gap-4 rounded-2xl px-4 py-3 text-center">
+    <div className={clsx('glass grid grid-cols-3 gap-4 rounded-2xl px-4 py-3 text-center', className)}>
       <Counter value={moving} label="moving" color={roleColor.VOLUNTEER} />
       <Counter value={waiting} label="need a rider" color={dispatchColor.ASSIGNED} />
       <Counter value={servings} label="unmatched" color={roleColor.DONOR} />
@@ -151,7 +154,7 @@ function SelectionDetails({ n, s }: { n: Network; s: NonNullable<Selection> }) {
         <p className="text-sm text-ink-400">{d.servingsAvailable} servings waiting · {food.length} open batch{food.length === 1 ? '' : 'es'}</p>
         <ul className="mt-4 space-y-2">
           {food.map((b) => (
-            <li key={b.id} className="flex items-center gap-3 rounded-2xl bg-white/[0.03] px-3 py-2">
+            <li key={b.id} className="flex items-center gap-3 rounded-2xl bg-wash/[0.03] px-3 py-2">
               <span className="text-lg">{categoryEmoji[b.category]}</span>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm text-ink-100">{b.foodName}</p>
@@ -176,7 +179,7 @@ function SelectionDetails({ n, s }: { n: Network; s: NonNullable<Selection> }) {
         </div>
         <h3 className="mt-3 text-lg font-semibold">{r.name}</h3>
         <p className="text-sm text-ink-400">Room for {r.remainingToday} of {r.dailyCapacity} servings today</p>
-        <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/6">
+        <div className="mt-3 h-2 overflow-hidden rounded-full bg-wash/6">
           <div className="h-full rounded-full bg-rose-400" style={{ width: `${(1 - r.remainingToday / (r.dailyCapacity || 1)) * 100}%` }} />
         </div>
         <p className="label mt-5">Incoming</p>
@@ -214,7 +217,7 @@ function SelectionDetails({ n, s }: { n: Network; s: NonNullable<Selection> }) {
         {lookups.donors.get(r.donorId)?.name ?? r.donorId} → {lookups.recipients.get(r.recipientId)?.name ?? r.recipientId} · {r.distanceKm} km
       </p>
       {r.volunteerId && (
-        <p className="mt-2 text-sm text-sky-300">Carried by {lookups.volunteers.get(r.volunteerId)?.name ?? 'a volunteer'}</p>
+        <p className="mt-2 text-sm text-sky-700">Carried by {lookups.volunteers.get(r.volunteerId)?.name ?? 'a volunteer'}</p>
       )}
     </>
   );

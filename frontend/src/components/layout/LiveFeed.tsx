@@ -19,19 +19,19 @@ import { timeAgo } from '../../lib/format';
 import type { LiveEvent } from '../../types';
 
 const ICON: Record<string, { icon: ReactNode; color: string }> = {
-  BATCH_LOGGED: { icon: <PackagePlus className="size-4" />, color: '#fbbf24' },
-  BATCH_EXPIRED: { icon: <CircleAlert className="size-4" />, color: '#f43f5e' },
-  BATCH_WITHDRAWN: { icon: <Ban className="size-4" />, color: '#64748b' },
-  DISPATCH_ASSIGNED: { icon: <Sparkles className="size-4" />, color: '#a78bfa' },
-  DISPATCH_CLAIMED: { icon: <Bike className="size-4" />, color: '#38bdf8' },
-  DISPATCH_RELEASED: { icon: <Bike className="size-4" />, color: '#64748b' },
-  DISPATCH_PICKED_UP: { icon: <Truck className="size-4" />, color: '#fbbf24' },
-  DISPATCH_DELIVERED: { icon: <CheckCircle2 className="size-4" />, color: '#34d399' },
-  DISPATCH_CONFIRMED: { icon: <Star className="size-4" />, color: '#fcd581' },
-  DISPATCH_CANCELLED: { icon: <Ban className="size-4" />, color: '#f43f5e' },
-  MATCHING_RUN: { icon: <HeartHandshake className="size-4" />, color: '#a78bfa' },
-  USER_REGISTERED: { icon: <UserCheck className="size-4" />, color: '#38bdf8' },
-  USER_STATUS_CHANGED: { icon: <UserCheck className="size-4" />, color: '#34d399' },
+  BATCH_LOGGED: { icon: <PackagePlus className="size-4" />, color: '#e8862a' },
+  BATCH_EXPIRED: { icon: <CircleAlert className="size-4" />, color: '#dc2f4f' },
+  BATCH_WITHDRAWN: { icon: <Ban className="size-4" />, color: '#8c7867' },
+  DISPATCH_ASSIGNED: { icon: <Sparkles className="size-4" />, color: '#8b5cf6' },
+  DISPATCH_CLAIMED: { icon: <Bike className="size-4" />, color: '#0f8fd6' },
+  DISPATCH_RELEASED: { icon: <Bike className="size-4" />, color: '#8c7867' },
+  DISPATCH_PICKED_UP: { icon: <Truck className="size-4" />, color: '#e8862a' },
+  DISPATCH_DELIVERED: { icon: <CheckCircle2 className="size-4" />, color: '#1f9d55' },
+  DISPATCH_CONFIRMED: { icon: <Star className="size-4" />, color: '#f2a950' },
+  DISPATCH_CANCELLED: { icon: <Ban className="size-4" />, color: '#dc2f4f' },
+  MATCHING_RUN: { icon: <HeartHandshake className="size-4" />, color: '#8b5cf6' },
+  USER_REGISTERED: { icon: <UserCheck className="size-4" />, color: '#0f8fd6' },
+  USER_STATUS_CHANGED: { icon: <UserCheck className="size-4" />, color: '#1f9d55' },
 };
 
 /** Real-time activity stream (Server-Sent Events), newest first, animated in with Motion. */
@@ -70,9 +70,9 @@ export function LiveFeed({ limit = 30, compact }: { limit?: number; compact?: bo
 }
 
 function FeedItem({ e, now, compact }: { e: LiveEvent; now: number; compact?: boolean }) {
-  const meta = ICON[e.type] ?? { icon: <Radio className="size-4" />, color: '#94a3b8' };
+  const meta = ICON[e.type] ?? { icon: <Radio className="size-4" />, color: '#a08c7a' };
   return (
-    <div className="flex items-start gap-3 rounded-2xl px-3 py-2.5 transition hover:bg-white/[0.03]">
+    <div className="flex items-start gap-3 rounded-2xl px-3 py-2.5 transition hover:bg-wash/[0.03]">
       <span
         className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-xl"
         style={{ color: meta.color, background: `color-mix(in oklab, ${meta.color} 14%, transparent)` }}

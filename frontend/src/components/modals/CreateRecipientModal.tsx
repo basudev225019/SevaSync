@@ -46,7 +46,7 @@ export function CreateRecipientModal({ open, onClose }: { open: boolean; onClose
       width="lg"
       footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button loading={create.isPending} onClick={() => create.mutate()}>Create recipient</Button></>}
     >
-      <div className="grid gap-5 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
         <div className="space-y-3.5">
           <Input label="Organisation name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Railway Night Shelter" />
           <div className="grid grid-cols-2 gap-3">
@@ -60,7 +60,7 @@ export function CreateRecipientModal({ open, onClose }: { open: boolean; onClose
           <Input label="Mobile" value={phone} onChange={(e) => setPhone(e.target.value)} />
           <Input label="Temporary password" type="text" value={password} onChange={(e) => setPassword(e.target.value)} hint="8+ characters with a letter and a digit" />
         </div>
-        <MapPicker value={location} onChange={setLocation} color="#fb7185" />
+        <MapPicker value={location} onChange={setLocation} color="#e34b6a" />
       </div>
     </Modal>
   );

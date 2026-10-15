@@ -12,9 +12,11 @@ interface CardProps extends HTMLAttributes<HTMLDivElement> {
 export function Card({ spotlight, padded = true, className, children, ...rest }: CardProps) {
   const classes = clsx('relative overflow-hidden rounded-3xl', padded && 'p-5 sm:p-6', className);
   if (spotlight) {
+    // SpotlightCard ships its own p-8, which would otherwise win over our responsive padding
     return (
       <SpotlightCard
-        className={clsx('glass', classes)}
+        theme="light"
+        className={clsx('glass', classes, padded ? 'p-5! sm:p-6!' : 'p-0!')}
         spotlightColor={spotlight}
         intensity={0.55}
         spotlightSize={420}
@@ -39,9 +41,10 @@ export function CardHeader({ title, subtitle, action, icon }: {
   icon?: ReactNode;
 }) {
   return (
-    <div className="mb-4 flex items-start justify-between gap-4">
-      <div className="flex min-w-0 items-start gap-3">
-        {icon && <div className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl bg-white/5 text-ink-200">{icon}</div>}
+    // the title keeps at least 12rem; on narrow cards the actions wrap underneath instead of squeezing it
+    <div className="mb-4 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+      <div className="flex min-w-0 flex-[1_1_12rem] items-start gap-3">
+        {icon && <div className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl bg-wash/5 text-ink-200">{icon}</div>}
         <div className="min-w-0">
           <h3 className="truncate text-base font-semibold">{title}</h3>
           {subtitle && <p className="mt-0.5 text-sm text-ink-400">{subtitle}</p>}

@@ -7,7 +7,7 @@ export default function NotFound() {
   return (
     <div className="grid min-h-dvh place-items-center bg-night-900 px-6 text-center">
       <div>
-        <Compass className="mx-auto size-10 text-saffron-300" />
+        <Compass className="mx-auto size-10 text-saffron-600" />
         <h1 className="mt-6 font-display text-6xl font-semibold">
           <DecryptedText text="404" animateOn="view" speed={60} maxIterations={14} sequential />
         </h1>

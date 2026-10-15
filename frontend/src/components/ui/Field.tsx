@@ -14,7 +14,7 @@ function Shell({ id, label, hint, error, className, children }: FieldShell & { i
       <label htmlFor={id} className="label">{label}</label>
       {children}
       {error ? (
-        <p className="mt-1.5 text-xs text-rose-300" role="alert">{error}</p>
+        <p className="mt-1.5 text-xs text-rose-700" role="alert">{error}</p>
       ) : (
         hint && <p className="mt-1.5 text-xs text-ink-500">{hint}</p>
       )}
@@ -64,7 +64,7 @@ export function Segmented<T extends string>({ label, value, options, onChange, c
   return (
     <div className={className}>
       {label && <span className="label">{label}</span>}
-      <div className="flex flex-wrap gap-1.5 rounded-2xl border border-white/6 bg-night-800/60 p-1">
+      <div className="flex flex-wrap gap-1.5 rounded-2xl border border-wash/6 bg-night-800/60 p-1">
         {options.map((o) => {
           const active = o.value === value;
           return (
@@ -74,8 +74,8 @@ export function Segmented<T extends string>({ label, value, options, onChange, c
               onClick={() => onChange(o.value)}
               aria-pressed={active}
               className={clsx(
-                'flex-1 rounded-xl px-3 py-2 text-xs font-semibold transition',
-                active ? 'bg-white/10 text-ink-100 shadow-inner' : 'text-ink-400 hover:text-ink-200',
+                'flex-1 whitespace-nowrap rounded-xl px-2 py-2 text-xs font-semibold transition sm:px-3',
+                active ? 'bg-wash/10 text-ink-100 shadow-inner' : 'text-ink-400 hover:text-ink-200',
               )}
               style={active && o.color ? { color: o.color, background: `color-mix(in oklab, ${o.color} 14%, transparent)` } : undefined}
             >

@@ -38,11 +38,11 @@ export default function PickupsView() {
         options={[
           { value: 'open', label: `Open (${open.data?.length ?? 0})`, color: roleColor.VOLUNTEER },
           { value: 'mine', label: `My runs (${active.length})`, color: roleColor.VOLUNTEER },
-          { value: 'done', label: `Delivered (${done.length})`, color: '#34d399' },
+          { value: 'done', label: `Delivered (${done.length})`, color: '#1f9d55' },
         ]}
       />
       {query.isError ? <ErrorState error={query.error} onRetry={() => query.refetch()} /> : query.isLoading ? (
-        <div className="grid gap-4 lg:grid-cols-2">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-56" />)}</div>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-56" />)}</div>
       ) : items.length === 0 ? (
         tab === 'open' ? (
           <EmptyState icon={<PartyPopper className="size-5" />} title="No food is waiting">Every batch already has a volunteer. Check back after dinner service.</EmptyState>

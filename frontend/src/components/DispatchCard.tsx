@@ -76,7 +76,7 @@ export function DispatchCard({ d, onStep, onConfirm, onCancel, busyId }: { d: Di
 
       <div className="relative flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-white/5 text-xl">{b ? categoryEmoji[b.category] : '🍽️'}</span>
+          <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-wash/5 text-xl">{b ? categoryEmoji[b.category] : '🍽️'}</span>
           <div className="min-w-0">
             <h3 className="truncate text-[15px] font-semibold">{b?.foodName ?? d.batchId}</h3>
             <p className="text-xs text-ink-400">
@@ -88,8 +88,8 @@ export function DispatchCard({ d, onStep, onConfirm, onCancel, busyId }: { d: Di
       </div>
 
       {/* route */}
-      <div className="relative mt-4 flex items-center gap-2 text-sm">
-        <span className="flex min-w-0 items-center gap-1.5">
+      <div className="relative mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+        <span className="flex min-w-0 max-w-full items-center gap-1.5">
           <span className="size-2 shrink-0 rounded-full" style={{ background: roleColor.DONOR }} />
           <span className="truncate text-ink-200">{d.donor?.name ?? 'Kitchen'}</span>
         </span>
@@ -98,7 +98,7 @@ export function DispatchCard({ d, onStep, onConfirm, onCancel, busyId }: { d: Di
           <ArrowRight className="size-3.5" />
           <span className="text-[11px]">{num1(d.distanceKm)} km</span>
         </span>
-        <span className="flex min-w-0 items-center gap-1.5">
+        <span className="flex min-w-0 max-w-full items-center gap-1.5">
           <span className="size-2 shrink-0 rounded-full" style={{ background: roleColor.RECIPIENT }} />
           <span className="truncate text-ink-200">{d.recipient?.name ?? d.recipientId}</span>
         </span>
@@ -106,8 +106,8 @@ export function DispatchCard({ d, onStep, onConfirm, onCancel, busyId }: { d: Di
 
       {role === 'VOLUNTEER' && d.distanceToPickupKm != null && d.status === 'ASSIGNED' && (
         <div className="mt-3 flex flex-wrap gap-2 text-xs">
-          <span className="inline-flex items-center gap-1 rounded-full bg-sky-400/10 px-2.5 py-1 text-sky-300"><MapPin className="size-3" /> {num1(d.distanceToPickupKm)} km to pickup</span>
-          <span className="inline-flex items-center gap-1 rounded-full bg-white/5 px-2.5 py-1 text-ink-300"><Navigation className="size-3" /> ~{d.etaMinutes} min door to door</span>
+          <span className="inline-flex items-center gap-1 rounded-full bg-sky-400/10 px-2.5 py-1 text-sky-700"><MapPin className="size-3" /> {num1(d.distanceToPickupKm)} km to pickup</span>
+          <span className="inline-flex items-center gap-1 rounded-full bg-wash/5 px-2.5 py-1 text-ink-300"><Navigation className="size-3" /> ~{d.etaMinutes} min door to door</span>
         </div>
       )}
 
@@ -122,7 +122,7 @@ export function DispatchCard({ d, onStep, onConfirm, onCancel, busyId }: { d: Di
             const done = i <= stageIndex;
             return (
               <li key={s.status} className="min-w-0">
-                <div className="h-1 rounded-full transition-colors duration-500" style={{ background: done ? dispatchColor[ORDER[Math.min(stageIndex, 3)]] : 'rgb(255 255 255 / 0.07)' }} />
+                <div className="h-1 rounded-full transition-colors duration-500" style={{ background: done ? dispatchColor[ORDER[Math.min(stageIndex, 3)]] : 'rgb(107 63 29 / 0.1)' }} />
                 <p className={clsx('mt-1.5 truncate text-[10px] font-medium uppercase tracking-wider', done ? 'text-ink-300' : 'text-ink-500')}>{s.label}</p>
                 <p className="text-[10px] text-ink-500 tabular">{clock(s.at(d))}</p>
               </li>
@@ -136,11 +136,11 @@ export function DispatchCard({ d, onStep, onConfirm, onCancel, busyId }: { d: Di
         <div className="flex items-center gap-2 text-xs text-ink-500">
           {d.volunteer && (
             <span className="inline-flex items-center gap-1.5 text-ink-300">
-              <Bike className="size-3.5 text-sky-300" /> {d.volunteer.name}{d.volunteer.vehicle && ` · ${vehicleLabel[d.volunteer.vehicle]}`}
+              <Bike className="size-3.5 text-sky-700" /> {d.volunteer.name}{d.volunteer.vehicle && ` · ${vehicleLabel[d.volunteer.vehicle]}`}
             </span>
           )}
           {d.rating ? (
-            <span className="inline-flex items-center gap-0.5 text-saffron-300">
+            <span className="inline-flex items-center gap-0.5 text-saffron-600">
               {Array.from({ length: d.rating }, (_, i) => <Star key={i} className="size-3 fill-current" />)}
             </span>
           ) : null}
@@ -148,7 +148,7 @@ export function DispatchCard({ d, onStep, onConfirm, onCancel, busyId }: { d: Di
         </div>
         {buttons.length > 0 && <div className="flex flex-wrap gap-2">{buttons}</div>}
       </div>
-      {d.feedback && <p className="mt-3 rounded-xl bg-white/[0.03] px-3 py-2 text-xs italic text-ink-300">“{d.feedback}”</p>}
+      {d.feedback && <p className="mt-3 rounded-xl bg-wash/[0.03] px-3 py-2 text-xs italic text-ink-300">“{d.feedback}”</p>}
     </motion.article>
   );
 }

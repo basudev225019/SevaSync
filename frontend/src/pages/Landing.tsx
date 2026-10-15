@@ -65,7 +65,7 @@ export default function Landing() {
   }, [reduced]);
 
   return (
-    <ClickSpark sparkColor={['#fbbf24', '#34d399', '#fb7185']} sparkCount={10} sparkRadius={22} duration={500}>
+    <ClickSpark sparkColor={['#e8862a', '#1f9d55', '#e34b6a']} sparkCount={10} sparkRadius={22} duration={500}>
       <div className="relative overflow-x-clip bg-night-900">
         <Navbar />
         <Hero stats={stats.data} network={network.data} />
@@ -103,13 +103,13 @@ function Hero({ stats, network }: { stats?: Awaited<ReturnType<typeof api.public
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3, duration: 0.6 }}
-          className="pointer-events-auto mb-6 inline-flex w-fit items-center gap-2.5 rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-1.5 text-xs font-medium text-ink-200 backdrop-blur"
+          className="pointer-events-auto mb-6 inline-flex w-fit items-center gap-2.5 rounded-full border border-wash/10 bg-wash/[0.04] px-3.5 py-1.5 text-xs font-medium text-ink-200 backdrop-blur"
         >
           <span className="relative inline-flex size-2">
             <span className="absolute inset-0 animate-ping rounded-full bg-leaf-400 opacity-70" />
             <span className="relative inline-flex size-2 rounded-full bg-leaf-400" />
           </span>
-          <ShinyText text="Live on campus right now" speed={3} color="#b7bfce" shineColor="#ffffff" />
+          <ShinyText text="Live on campus right now" speed={3} color="#64503f" shineColor="#e8862a" />
         </motion.div>
 
         <h1 className="max-w-3xl font-display text-[clamp(2.6rem,7vw,5.6rem)] font-semibold leading-[0.95] tracking-[-0.035em]">
@@ -133,7 +133,7 @@ function Hero({ stats, network }: { stats?: Awaited<ReturnType<typeof api.public
           Built for
           <RotatingText
             texts={['hostel messes', 'orphanages', 'student volunteers', 'night shelters', 'campus canteens']}
-            mainClassName="overflow-hidden rounded-lg bg-saffron-400/12 px-2 py-0.5 font-semibold text-saffron-300"
+            mainClassName="overflow-hidden rounded-lg bg-saffron-400/12 px-2 py-0.5 font-semibold text-saffron-600"
             staggerDuration={0.02}
             rotationInterval={2200}
             splitBy="characters"
@@ -142,7 +142,7 @@ function Hero({ stats, network }: { stats?: Awaited<ReturnType<typeof api.public
 
         <div className="pointer-events-auto mt-9 flex flex-wrap items-center gap-3">
           <Link to="/register">
-            <StarBorder as="span" color="#fbbf24" duration={5} className="inline-block" backgroundColor="#0e121b" textColor="#f4f6fb">
+            <StarBorder as="span" theme="light" color="#e8862a" duration={5} className="inline-block" backgroundColor="#fffaf2" textColor="#2a1a10">
               <span className="flex items-center gap-2 px-1 font-semibold">
                 Join the movement <ArrowRight className="size-4" />
               </span>
@@ -190,10 +190,10 @@ function ProblemStrip() {
   ];
   return (
     <section className="relative border-y hairline bg-night-850/60 py-16">
-      <div className="mx-auto grid max-w-6xl gap-6 px-5 md:grid-cols-3">
+      <div className="mx-auto grid grid-cols-1 max-w-6xl gap-6 px-5 md:grid-cols-3">
         {facts.map((f, i) => (
           <FadeContent key={f.big} blur duration={0.9} delay={i * 0.12} className="flex gap-4">
-            <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-white/5 text-saffron-300">{f.icon}</span>
+            <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-wash/5 text-saffron-600">{f.icon}</span>
             <div>
               <div className="font-display text-3xl font-semibold text-ink-100">{f.big}</div>
               <p className="mt-1 text-sm leading-relaxed text-ink-400">{f.text}</p>
@@ -209,7 +209,7 @@ function ProblemStrip() {
 
 const STEPS = [
   { icon: <PackagePlus className="size-6" />, color: roleColor.DONOR, title: 'Log the surplus', text: 'A mess manager logs what is left over: dish, servings, when it was cooked. Thirty seconds on a phone.' },
-  { icon: <ShieldCheck className="size-6" />, color: '#34d399', title: 'Safety check', text: 'Category limits (4 h for cooked meals, 12 h for bakery…) and a 30-minute minimum window. Unsafe food never enters the system.' },
+  { icon: <ShieldCheck className="size-6" />, color: '#1f9d55', title: 'Safety check', text: 'Category limits (4 h for cooked meals, 12 h for bakery…) and a 30-minute minimum window. Unsafe food never enters the system.' },
   { icon: <BrainCircuit className="size-6" />, color: roleColor.ADMIN, title: 'Smart match', text: 'Soonest-expiring food first. Each batch goes to the reachable shelter with the best mix of need, distance and fairness.' },
   { icon: <Bike className="size-6" />, color: roleColor.VOLUNTEER, title: 'Deliver & confirm', text: 'The nearest volunteer claims the pickup, carries it over and the shelter confirms with a rating. Every step is on the audit trail.' },
 ];
@@ -243,16 +243,16 @@ function HowItWorks() {
       <div className="mx-auto w-full max-w-6xl px-5">
         <SectionTitle eyebrow="How it works" title="From leftover to lifeline in four steps" />
         <div className="relative mt-14">
-          <div className="absolute left-0 right-0 top-9 hidden h-px bg-white/8 md:block">
+          <div className="absolute left-0 right-0 top-9 hidden h-px bg-wash/8 md:block">
             <div className="how-progress h-full origin-left bg-gradient-to-r from-saffron-400 via-violet-400 to-sky-400" />
           </div>
-          <div className="grid gap-5 md:grid-cols-4">
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-4">
             {STEPS.map((s, i) => (
               <div key={s.title} className="how-step relative">
                 <div className="relative mb-5 grid size-[72px] place-items-center rounded-3xl border hairline bg-night-800" style={{ color: s.color }}>
                   <div className="how-glow absolute inset-0 rounded-3xl opacity-0 blur-xl" style={{ background: `${s.color}55` }} />
                   <span className="relative">{s.icon}</span>
-                  <span className="absolute -right-2 -top-2 grid size-6 place-items-center rounded-full bg-night-900 text-[11px] font-bold text-ink-300 ring-1 ring-white/10">{i + 1}</span>
+                  <span className="absolute -right-2 -top-2 grid size-6 place-items-center rounded-full bg-night-900 text-[11px] font-bold text-ink-300 ring-1 ring-wash/10">{i + 1}</span>
                 </div>
                 <h3 className="text-lg font-semibold">{s.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-ink-400">{s.text}</p>
@@ -278,7 +278,7 @@ function Roles() {
     <section id="roles" className="relative py-28">
       <div className="mx-auto max-w-6xl px-5">
         <SectionTitle eyebrow="Who it serves" title="One platform, four ways to help" />
-        <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {roles.map((r, i) => (
             <FadeContent key={r.role} blur duration={0.8} delay={i * 0.1}>
               <Card spotlight={`${roleColor[r.role]}40`} className="h-full">
@@ -307,15 +307,15 @@ function Roles() {
 
 function SmartMatching() {
   const factors = [
-    { icon: <Clock3 className="size-5" />, title: 'Time', text: 'Soonest-expiring food is matched first, and only to places a volunteer can reach before it expires.', w: 100, color: '#fbbf24' },
-    { icon: <Users className="size-5" />, title: 'Need', text: 'Critical-need shelters weigh three times more than normal ones, so the hungriest are fed first.', w: 85, color: '#fb7185' },
-    { icon: <MapPinned className="size-5" />, title: 'Distance', text: 'Shorter trips mean fresher food and more deliveries per volunteer hour.', w: 60, color: '#38bdf8' },
-    { icon: <Scale className="size-5" />, title: 'Fairness', text: 'Recipients who received less this week get a boost, so no shelter is starved by its location.', w: 45, color: '#34d399' },
+    { icon: <Clock3 className="size-5" />, title: 'Time', text: 'Soonest-expiring food is matched first, and only to places a volunteer can reach before it expires.', w: 100, color: '#e8862a' },
+    { icon: <Users className="size-5" />, title: 'Need', text: 'Critical-need shelters weigh three times more than normal ones, so the hungriest are fed first.', w: 85, color: '#e34b6a' },
+    { icon: <MapPinned className="size-5" />, title: 'Distance', text: 'Shorter trips mean fresher food and more deliveries per volunteer hour.', w: 60, color: '#0f8fd6' },
+    { icon: <Scale className="size-5" />, title: 'Fairness', text: 'Recipients who received less this week get a boost, so no shelter is starved by its location.', w: 45, color: '#1f9d55' },
   ];
   return (
     <section id="impact" className="relative overflow-hidden py-28">
       <div className="grid-fade pointer-events-none absolute inset-0 opacity-60" />
-      <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-5 lg:grid-cols-2">
+      <div className="relative mx-auto grid grid-cols-1 max-w-6xl items-center gap-12 px-5 lg:grid-cols-2">
         <div>
           <SectionTitle eyebrow="The engine" title="Matching that thinks about time, need, distance and fairness" align="left" />
           <p className="mt-5 text-ink-400">
@@ -338,7 +338,7 @@ function SmartMatching() {
                     <h3 className="font-semibold">{f.title}</h3>
                   </div>
                   <p className="mt-1 text-sm text-ink-400">{f.text}</p>
-                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/6">
+                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-wash/6">
                     <motion.div
                       className="h-full rounded-full"
                       style={{ background: f.color }}
@@ -375,7 +375,7 @@ function Trust() {
   return (
     <section id="trust" className="relative py-28">
       <div className="mx-auto max-w-6xl px-5">
-        <div className="grid gap-10 lg:grid-cols-5">
+        <div className="grid grid-cols-1 gap-10 lg:grid-cols-5">
           <div className="lg:col-span-2">
             <SectionTitle eyebrow="Trust" title="Every action, sealed in a tamper-evident chain" align="left" />
             <p className="mt-5 text-ink-400">
@@ -386,12 +386,12 @@ function Trust() {
           <div className="glass relative overflow-hidden rounded-3xl p-5 font-mono text-xs lg:col-span-3">
             {hashes.map((h, i) => (
               <div key={h} className="flex items-center gap-3 border-b hairline py-3 last:border-0">
-                <Fingerprint className="size-4 shrink-0 text-leaf-400" />
+                <Fingerprint className="size-4 shrink-0 text-leaf-700" />
                 <span className="text-ink-500">#{1042 + i}</span>
-                <DecryptedText text={h} animateOn="view" sequential revealDirection="start" speed={18} className="truncate text-ink-200" encryptedClassName="text-saffron-400/70" parentClassName="min-w-0 truncate" />
+                <DecryptedText text={h} animateOn="view" sequential revealDirection="start" speed={18} className="truncate text-ink-200" encryptedClassName="text-saffron-600/70" parentClassName="min-w-0 truncate" />
               </div>
             ))}
-            <div className="mt-4 flex items-center gap-2 text-leaf-300">
+            <div className="mt-4 flex items-center gap-2 text-leaf-700">
               <ShieldCheck className="size-4" /> chain intact · verified on demand from the coordinator console
             </div>
           </div>
@@ -399,11 +399,11 @@ function Trust() {
 
         <div className="mt-20">
           <SectionTitle eyebrow="Universal Human Values" title="Engineered around values, not just features" />
-          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {values.map((v, i) => (
               <FadeContent key={v.name} blur duration={0.8} delay={i * 0.08}>
-                <div className="h-full rounded-3xl border hairline bg-white/[0.02] p-5">
-                  <span className="text-saffron-300">{v.icon}</span>
+                <div className="h-full rounded-3xl border hairline bg-wash/[0.02] p-5">
+                  <span className="text-saffron-600">{v.icon}</span>
                   <h3 className="mt-4 text-lg font-semibold">{v.name}</h3>
                   <p className="text-xs uppercase tracking-[0.14em] text-ink-500">{v.meaning}</p>
                   <p className="mt-3 text-sm text-ink-400">{v.text}</p>
@@ -422,12 +422,21 @@ function Trust() {
 function FinalCta() {
   return (
     <section className="relative overflow-hidden py-32">
-      <div className="absolute inset-0 opacity-70">
-        <Aurora colorStops={['#f59e0b', '#10b981', '#fb7185']} amplitude={1.1} blend={0.55} speed={0.6} intro={false} />
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(45% 60% at 25% 50%, #ffd6a8 0%, transparent 70%),' +
+            'radial-gradient(40% 55% at 75% 45%, #ffc8d2 0%, transparent 70%),' +
+            'radial-gradient(50% 40% at 50% 80%, #ffe7a3 0%, transparent 70%)',
+        }}
+      />
+      <div className="absolute inset-0 opacity-50 mix-blend-multiply">
+        <Aurora colorStops={['#f7b267', '#fb7185', '#fcd34d']} amplitude={1.1} blend={0.55} speed={0.6} intro={false} />
       </div>
-      <div className="absolute inset-0 bg-gradient-to-b from-night-900 via-night-900/40 to-night-900" />
+      <div className="absolute inset-0 bg-gradient-to-b from-night-900 via-transparent to-night-900" />
       <div className="relative mx-auto max-w-3xl px-5 text-center">
-        <Truck className="mx-auto size-8 text-saffron-300" />
+        <Truck className="mx-auto size-8 text-saffron-600" />
         <h2 className="mt-6 font-display text-[clamp(2.2rem,5vw,3.8rem)] font-semibold leading-[1.02] tracking-tight">
           Tonight's leftovers can be<br />
           <span className="text-gradient">someone's dinner.</span>
@@ -458,7 +467,7 @@ function Footer() {
 function SectionTitle({ eyebrow, title, align = 'center' }: { eyebrow: string; title: string; align?: 'center' | 'left' }) {
   return (
     <div className={align === 'center' ? 'mx-auto max-w-2xl text-center' : ''}>
-      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-saffron-300">{eyebrow}</p>
+      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-saffron-600">{eyebrow}</p>
       <h2 className="mt-3 font-display text-[clamp(1.9rem,4vw,3rem)] font-semibold leading-[1.05] tracking-tight">{title}</h2>
     </div>
   );

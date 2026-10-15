@@ -20,8 +20,8 @@ export function StatCard({ label, value, icon, accent, suffix, decimals = 0, hin
     <Card spotlight={`${accent}33`} className={clsx('group', className)}>
       <div className="pointer-events-none absolute -right-10 -top-10 size-36 rounded-full opacity-20 blur-3xl transition-opacity duration-500 group-hover:opacity-40" style={{ background: accent }} />
       <div className="relative flex items-start justify-between gap-3">
-        <span className="text-xs font-medium uppercase tracking-[0.14em] text-ink-400">{label}</span>
-        <span className="grid size-9 place-items-center rounded-xl" style={{ color: accent, background: `color-mix(in oklab, ${accent} 14%, transparent)` }}>
+        <span className="min-w-0 text-xs font-medium uppercase tracking-[0.08em] text-ink-400 [overflow-wrap:anywhere] sm:tracking-[0.14em]">{label}</span>
+        <span className="hidden size-9 shrink-0 place-items-center sm:grid rounded-xl" style={{ color: accent, background: `color-mix(in oklab, ${accent} 14%, transparent)` }}>
           {icon}
         </span>
       </div>

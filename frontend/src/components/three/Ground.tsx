@@ -21,33 +21,33 @@ export function Ground({ animate = true }: { animate?: boolean }) {
     <group>
       <mesh rotation-x={-Math.PI / 2} position-y={-0.02} receiveShadow>
         <circleGeometry args={[40, 64]} />
-        <meshStandardMaterial color="#05070c" roughness={1} metalness={0} />
+        <meshStandardMaterial color="#f7ecdd" roughness={1} metalness={0} />
       </mesh>
       <Grid
         position={[0, -0.01, 0]}
         args={[60, 60]}
         cellSize={0.5}
         cellThickness={0.5}
-        cellColor="#141b29"
+        cellColor="#ead9c3"
         sectionSize={2}
         sectionThickness={0.9}
-        sectionColor="#1d2738"
+        sectionColor="#dcc6a8"
         fadeDistance={34}
         fadeStrength={1.6}
         infiniteGrid
       />
       {rings.map((pts, i) => (
-        <Line key={i} points={pts} color="#2a3550" lineWidth={1} transparent opacity={0.55 - i * 0.07} dashed dashSize={0.25} gapSize={0.2} />
+        <Line key={i} points={pts} color="#d2b896" lineWidth={1} transparent opacity={0.55 - i * 0.07} dashed dashSize={0.25} gapSize={0.2} />
       ))}
       {/* campus boundary */}
-      <Line points={campus} color="#fbbf24" lineWidth={1.6} transparent opacity={0.55} />
+      <Line points={campus} color="#e8862a" lineWidth={1.6} transparent opacity={0.55} />
       <mesh rotation-x={-Math.PI / 2} position-y={0.005}>
         <circleGeometry args={[1.7, 6, Math.PI / 6]} />
-        <meshBasicMaterial color="#fbbf24" transparent opacity={0.05} />
+        <meshBasicMaterial color="#e8862a" transparent opacity={0.05} />
       </mesh>
       <mesh ref={pulse} rotation-x={-Math.PI / 2} position-y={0.01}>
         <ringGeometry args={[0.985, 1, 96]} />
-        <meshBasicMaterial color="#fbbf24" transparent opacity={0.15} toneMapped={false} />
+        <meshBasicMaterial color="#e8862a" transparent opacity={0.15} toneMapped={false} />
       </mesh>
     </group>
   );

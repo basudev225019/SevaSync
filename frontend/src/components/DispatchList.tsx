@@ -16,7 +16,7 @@ export function DispatchList({ items, columns = 2 }: { items: Dispatch[]; column
 
   return (
     <>
-      <div className={`grid gap-4 ${cols}`}>
+      <div className={`grid grid-cols-1 gap-4 ${cols}`}>
         <AnimatePresence initial={false}>
           {items.map((d) => (
             <DispatchCard

@@ -1,10 +1,10 @@
 import { useMemo, useRef, useState } from 'react';
 import { useFrame, type ThreeEvent } from '@react-three/fiber';
-import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { donorTypeLabel, needLabel, recipientTypeLabel, vehicleLabel } from '../../lib/format';
 import { freshnessColor, needColor, roleColor } from '../../lib/theme';
 import type { NetworkBatch, NetworkDonor, NetworkRecipient, NetworkVolunteer } from '../../types';
+import { useSceneLabel, type LabelStore } from './labelStore';
 
 export type Selection = { kind: 'donor' | 'recipient' | 'volunteer' | 'route'; id: string } | null;
 
@@ -15,6 +15,15 @@ interface NodeProps {
   showLabel: boolean;
   animate: boolean;
   onSelect: (s: Selection) => void;
+  labels: LabelStore;
+}
+
+/** Stable anchor function for a label at a fixed world position. */
+function useAnchor(x: number, y: number, z: number) {
+  return useMemo(() => {
+    const v = new THREE.Vector3(x, y, z);
+    return () => v;
+  }, [x, y, z]);
 }
 
 function useHover() {
@@ -34,7 +43,7 @@ function useHover() {
 }
 
 /** Kitchen: a glowing tower whose height shows how much food is waiting there. Food orbs circle its crown. */
-export function DonorTower({ donor, batches, position, selected, dimmed, showLabel, animate, onSelect }: NodeProps & {
+export function DonorTower({ donor, batches, position, selected, dimmed, showLabel, animate, onSelect, labels }: NodeProps & {
   donor: NetworkDonor;
   batches: NetworkBatch[];
 }) {
@@ -43,6 +52,20 @@ export function DonorTower({ donor, batches, position, selected, dimmed, showLab
   const height = 0.5 + Math.min(1.3, donor.servingsAvailable / 70 + batches.length * 0.12);
   const color = roleColor.DONOR;
   const active = hovered || selected;
+  const anchor = useAnchor(position[0], height + 0.55, position[1]);
+  useSceneLabel(labels, `donor-${donor.id}`, anchor, active ? (
+    <div className="scene-tooltip">
+      <strong>{donor.name}</strong>
+      {donor.donorType && donorTypeLabel[donor.donorType]} · {donor.openBatches} open batch{donor.openBatches === 1 ? '' : 'es'}
+      <br />
+      <span style={{ color }}>{donor.servingsAvailable} servings waiting for a match</span>
+    </div>
+  ) : showLabel ? (
+    <div className="scene-label" data-dim={dimmed}>
+      <span className="dot" style={{ background: color }} />
+      {donor.name}
+    </div>
+  ) : null, active);
 
   useFrame((_, dt) => {
     if (!group.current) return;
@@ -54,11 +77,11 @@ export function DonorTower({ donor, batches, position, selected, dimmed, showLab
       <group ref={group} {...bind} onClick={(e) => { e.stopPropagation(); onSelect({ kind: 'donor', id: donor.id }); }}>
         <mesh position-y={0.04}>
           <cylinderGeometry args={[0.42, 0.48, 0.08, 6]} />
-          <meshStandardMaterial color="#141008" emissive={color} emissiveIntensity={active ? 0.5 : 0.18} />
+          <meshStandardMaterial color="#f1dcc4" emissive={color} emissiveIntensity={active ? 0.2 : 0.04} roughness={0.8} />
         </mesh>
         <mesh position-y={height / 2 + 0.08}>
           <boxGeometry args={[0.36, height, 0.36]} />
-          <meshStandardMaterial color="#1c1407" emissive={color} emissiveIntensity={dimmed ? 0.08 : active ? 0.55 : 0.28} roughness={0.35} metalness={0.4} transparent opacity={dimmed ? 0.35 : 1} />
+          <meshStandardMaterial color="#f4a85c" emissive={color} emissiveIntensity={dimmed ? 0 : active ? 0.3 : 0.08} roughness={0.55} metalness={0.05} transparent opacity={dimmed ? 0.35 : 1} />
         </mesh>
         <mesh position-y={height + 0.1}>
           <boxGeometry args={[0.4, 0.05, 0.4]} />
@@ -73,23 +96,6 @@ export function DonorTower({ donor, batches, position, selected, dimmed, showLab
         )}
       </group>
       <FoodOrbs batches={batches} height={height} animate={animate} dimmed={dimmed} />
-      {(showLabel || active) && (
-        <Html position={[0, height + 0.55, 0]} zIndexRange={[10, 0]} style={{ pointerEvents: 'none' }}>
-          {active ? (
-            <div className="scene-tooltip">
-              <strong>{donor.name}</strong>
-              {donor.donorType && donorTypeLabel[donor.donorType]} · {donor.openBatches} open batch{donor.openBatches === 1 ? '' : 'es'}
-              <br />
-              <span style={{ color }}>{donor.servingsAvailable} servings waiting for a match</span>
-            </div>
-          ) : (
-            <div className="scene-label" data-dim={dimmed}>
-              <span className="dot" style={{ background: color }} />
-              {donor.name}
-            </div>
-          )}
-        </Html>
-      )}
     </group>
   );
 }
@@ -125,7 +131,7 @@ function FoodOrbs({ batches, height, animate, dimmed }: { batches: NetworkBatch[
 }
 
 /** Recipient: a dome with a ring showing today's remaining capacity; critical need pulses. */
-export function RecipientHub({ recipient, position, selected, dimmed, showLabel, animate, onSelect }: NodeProps & {
+export function RecipientHub({ recipient, position, selected, dimmed, showLabel, animate, onSelect, labels }: NodeProps & {
   recipient: NetworkRecipient;
 }) {
   const [hovered, bind] = useHover();
@@ -137,6 +143,21 @@ export function RecipientHub({ recipient, position, selected, dimmed, showLabel,
   const filled = 1 - Math.max(0, Math.min(1, recipient.remainingToday / capacity));
   const active = hovered || selected;
   const ring = useMemo(() => Math.max(0.0001, filled) * Math.PI * 2, [filled]);
+  const anchor = useAnchor(position[0], 0.95, position[1]);
+  useSceneLabel(labels, `recipient-${recipient.id}`, anchor, active ? (
+    <div className="scene-tooltip">
+      <strong>{recipient.name}</strong>
+      {recipient.recipientType && recipientTypeLabel[recipient.recipientType]} ·{' '}
+      <span style={{ color: needColor[need] }}>{needLabel[need]}</span>
+      <br />
+      Room for {recipient.remainingToday} of {capacity} servings today
+    </div>
+  ) : showLabel ? (
+    <div className="scene-label" data-dim={dimmed}>
+      <span className="dot" style={{ background: color }} />
+      {recipient.name}
+    </div>
+  ) : null, active);
 
   useFrame(({ clock }, dt) => {
     if (pulse.current && animate && need !== 'NORMAL') {
@@ -155,7 +176,7 @@ export function RecipientHub({ recipient, position, selected, dimmed, showLabel,
       <group ref={dome} {...bind} onClick={(e) => { e.stopPropagation(); onSelect({ kind: 'recipient', id: recipient.id }); }}>
         <mesh position-y={0}>
           <sphereGeometry args={[0.42, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
-          <meshStandardMaterial color="#1a0a0f" emissive={color} emissiveIntensity={dimmed ? 0.06 : active ? 0.7 : 0.32} roughness={0.3} metalness={0.3} transparent opacity={dimmed ? 0.35 : 0.95} />
+          <meshStandardMaterial color="#f4a3b3" emissive={color} emissiveIntensity={dimmed ? 0 : active ? 0.3 : 0.08} roughness={0.45} metalness={0.05} transparent opacity={dimmed ? 0.35 : 0.95} />
         </mesh>
         <mesh position-y={0.47}>
           <sphereGeometry args={[0.06, 16, 16]} />
@@ -165,7 +186,7 @@ export function RecipientHub({ recipient, position, selected, dimmed, showLabel,
       {/* capacity used today */}
       <mesh rotation-x={-Math.PI / 2} position-y={0.02}>
         <ringGeometry args={[0.55, 0.62, 64]} />
-        <meshBasicMaterial color="#2a1820" transparent opacity={0.8} />
+        <meshBasicMaterial color="#ecd3d6" transparent opacity={0.8} />
       </mesh>
       <mesh rotation-x={-Math.PI / 2} rotation-z={Math.PI / 2} position-y={0.025}>
         <ringGeometry args={[0.55, 0.62, 64, 1, 0, ring]} />
@@ -177,35 +198,24 @@ export function RecipientHub({ recipient, position, selected, dimmed, showLabel,
           <meshBasicMaterial color={needColor[need]} transparent opacity={0.5} toneMapped={false} />
         </mesh>
       )}
-      {(showLabel || active) && (
-        <Html position={[0, 0.95, 0]} zIndexRange={[10, 0]} style={{ pointerEvents: 'none' }}>
-          {active ? (
-            <div className="scene-tooltip">
-              <strong>{recipient.name}</strong>
-              {recipient.recipientType && recipientTypeLabel[recipient.recipientType]} ·{' '}
-              <span style={{ color: needColor[need] }}>{needLabel[need]}</span>
-              <br />
-              Room for {recipient.remainingToday} of {capacity} servings today
-            </div>
-          ) : (
-            <div className="scene-label" data-dim={dimmed}>
-              <span className="dot" style={{ background: color }} />
-              {recipient.name}
-            </div>
-          )}
-        </Html>
-      )}
     </group>
   );
 }
 
 /** Idle volunteer at home: a small floating crystal. */
-export function VolunteerMarker({ volunteer, position, selected, animate, onSelect }: Omit<NodeProps, 'dimmed' | 'showLabel'> & {
+export function VolunteerMarker({ volunteer, position, selected, animate, onSelect, labels }: Omit<NodeProps, 'dimmed' | 'showLabel'> & {
   volunteer: NetworkVolunteer;
 }) {
   const [hovered, bind] = useHover();
   const ref = useRef<THREE.Mesh>(null);
   const active = hovered || selected;
+  const anchor = useAnchor(position[0], 0.75, position[1]);
+  useSceneLabel(labels, `volunteer-${volunteer.id}`, anchor, active ? (
+    <div className="scene-tooltip">
+      <strong>{volunteer.name}</strong>
+      {volunteer.vehicle && vehicleLabel[volunteer.vehicle]} · {volunteer.activePickups} active pickup{volunteer.activePickups === 1 ? '' : 's'}
+    </div>
+  ) : null, true);
   useFrame(({ clock }) => {
     if (!ref.current) return;
     if (animate) {
@@ -219,14 +229,6 @@ export function VolunteerMarker({ volunteer, position, selected, animate, onSele
         <octahedronGeometry args={[active ? 0.16 : 0.12]} />
         <meshBasicMaterial color={roleColor.VOLUNTEER} toneMapped={false} />
       </mesh>
-      {active && (
-        <Html position={[0, 0.75, 0]} zIndexRange={[10, 0]} style={{ pointerEvents: 'none' }}>
-          <div className="scene-tooltip">
-            <strong>{volunteer.name}</strong>
-            {volunteer.vehicle && vehicleLabel[volunteer.vehicle]} · {volunteer.activePickups} active pickup{volunteer.activePickups === 1 ? '' : 's'}
-          </div>
-        </Html>
-      )}
     </group>
   );
 }
