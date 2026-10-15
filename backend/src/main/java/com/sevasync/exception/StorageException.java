@@ -1,6 +1,9 @@
 package com.sevasync.exception;
 
-/** Unrecoverable file-system / data-corruption problem (unchecked). */
+/**
+ * Infrastructure failure (database or file system). Unchecked, because no business caller can recover from it;
+ * the API turns it into a generic HTTP 500 without leaking details.
+ */
 public class StorageException extends RuntimeException {
     private static final long serialVersionUID = 1L;
 

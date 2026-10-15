@@ -1,229 +1,156 @@
 package com.sevasync.storage;
 
 import com.sevasync.database.DatabaseManager;
-import com.sevasync.exception.StorageException;
-import com.sevasync.util.CsvUtil;
 import com.sevasync.util.TimeUtil;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
+import java.security.GeneralSecurityException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
- * Append-only tamper-evident audit trail.
- * Supports both SQLite database storage and CSV fallback.
- * Every row carries the SHA-256 hash of its content plus the previous row's hash.
+ * Append-only, tamper-evident audit trail.
+ *
+ * <p>Each row stores {@code HMAC-SHA256(serverKey, previousHash | row fields)}. Because the key never leaves the
+ * server, someone with write access to the database file can delete or edit rows but cannot recompute a valid chain,
+ * so {@link #verify()} pinpoints the first altered row. (A plain SHA-256 chain could simply be recomputed.)
+ *
+ * <p>{@link #log} must be called inside the business transaction it describes: the audit row and the change
+ * commit or roll back together.
  */
 public class AuditLogger {
-    public static final String[] HEADER = {"seq", "timestamp", "action", "entityType", "entityId", "details",
-            "prevHash", "hash"};
     private static final String GENESIS = "0".repeat(64);
+    private static final String COLUMNS = "seq, timestamp, actor_id, action, entity_type, entity_id, details, prev_hash, hash";
 
-    public record AuditEntry(long seq, LocalDateTime timestamp, String action, String entityType,
+    public record AuditEntry(long seq, LocalDateTime timestamp, String actorId, String action, String entityType,
                              String entityId, String details, String prevHash, String hash) {
+        public Map<String, Object> toMap() {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("seq", seq);
+            m.put("timestamp", timestamp);
+            m.put("actorId", actorId);
+            m.put("action", action);
+            m.put("entityType", entityType);
+            m.put("entityId", entityId);
+            m.put("details", details);
+            m.put("prevHash", prevHash);
+            m.put("hash", hash);
+            return m;
+        }
     }
 
-    public record Verification(boolean valid, int entries, long firstBadSeq) {
+    public record Verification(boolean valid, long entries, long firstBadSeq, String reason) {
+        public Map<String, Object> toMap() {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("valid", valid);
+            m.put("entries", entries);
+            m.put("firstBadSeq", firstBadSeq == 0 ? null : firstBadSeq);
+            m.put("reason", reason);
+            return m;
+        }
     }
+
+    /** Actor id used for actions the system takes on its own (expiry monitor, auto-matching). */
+    public static final String SYSTEM = "SYSTEM";
 
     private final DatabaseManager db;
-    private final FileStorageManager storage;
-    private final Path file;
+    private final SecretKeySpec key;
     private final Clock clock;
-    private long lastSeq = 0;
-    private String lastHash = GENESIS;
 
-    /**
-     * Constructs SQLite-backed AuditLogger.
-     */
-    public AuditLogger(DatabaseManager db, Clock clock) {
+    public AuditLogger(DatabaseManager db, byte[] secret, Clock clock) {
         this.db = db;
-        this.storage = null;
-        this.file = null;
+        this.key = new SecretKeySpec(secret.clone(), "HmacSHA256");
         this.clock = clock;
-        initFromDatabase();
     }
 
-    /**
-     * Constructs CSV-backed AuditLogger (fallback / file mode).
-     */
-    public AuditLogger(FileStorageManager storage, String fileName, Clock clock) {
-        this.db = null;
-        this.storage = storage;
-        this.file = storage.resolve(fileName);
-        this.clock = clock;
-        List<String> lines = storage.readLines(file);
-        if (lines.isEmpty()) {
-            storage.appendLine(file, CsvUtil.join(HEADER));
+    public AuditEntry log(String actorId, String action, String entityType, String entityId, String details) {
+        return db.inTransaction(() -> {
+            String[] last = db.queryOne("SELECT seq, hash FROM audit_log ORDER BY seq DESC LIMIT 1",
+                    rs -> new String[]{rs.getString(1), rs.getString(2)}).orElse(new String[]{"0", GENESIS});
+            long seq = Long.parseLong(last[0]) + 1;
+            String prev = last[1];
+            LocalDateTime ts = TimeUtil.now(clock);
+            String actor = actorId == null ? SYSTEM : actorId;
+            String clean = details == null ? "" : details.replace('\r', ' ').replace('\n', ' ');
+            String hash = mac(prev, seq, ts, actor, action, entityType, entityId, clean);
+            db.update("INSERT INTO audit_log (" + COLUMNS + ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    seq, ts, actor, action, entityType, entityId, clean, prev, hash);
+            return new AuditEntry(seq, ts, actor, action, entityType, entityId, clean, prev, hash);
+        });
+    }
+
+    /** Newest {@code limit} entries, optionally filtered by entity, oldest first. */
+    public List<AuditEntry> tail(int limit, String entityType, String entityId) {
+        List<AuditEntry> rows;
+        if (entityType != null && entityId != null) {
+            rows = db.query("SELECT " + COLUMNS + " FROM audit_log WHERE entity_type = ? AND entity_id = ? "
+                    + "ORDER BY seq DESC LIMIT ?", AuditLogger::map, entityType, entityId, limit);
         } else {
-            List<AuditEntry> entries = parseCsv(lines);
-            if (!entries.isEmpty()) {
-                AuditEntry last = entries.get(entries.size() - 1);
-                lastSeq = last.seq();
-                lastHash = last.hash();
-            }
+            rows = db.query("SELECT " + COLUMNS + " FROM audit_log ORDER BY seq DESC LIMIT ?", AuditLogger::map,
+                    limit);
         }
+        List<AuditEntry> out = new ArrayList<>(rows);
+        java.util.Collections.reverse(out);
+        return out;
     }
 
-    private void initFromDatabase() {
-        String sql = "SELECT seq, hash FROM audit_log ORDER BY seq DESC LIMIT 1";
-        try (Connection conn = db.getConnection(); Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
-            if (rs.next()) {
-                lastSeq = rs.getLong("seq");
-                lastHash = rs.getString("hash");
-            }
-        } catch (SQLException e) {
-            throw new StorageException("Failed to read last audit log entry from database: " + e.getMessage(), e);
-        }
+    public List<AuditEntry> readAll() {
+        return db.query("SELECT " + COLUMNS + " FROM audit_log ORDER BY seq", AuditLogger::map);
     }
 
-    public synchronized AuditEntry log(String action, String entityType, String entityId, String details) {
-        long seq = lastSeq + 1;
-        LocalDateTime ts = TimeUtil.now(clock);
-        String cleanDetails = details == null ? "" : details.replace('\r', ' ').replace('\n', ' ');
-        String hash = computeHash(lastHash, seq, ts, action, entityType, entityId, cleanDetails);
-        AuditEntry entry = new AuditEntry(seq, ts, action, entityType, entityId, cleanDetails, lastHash, hash);
-
-        if (db != null) {
-            String sql = "INSERT INTO audit_log (seq, timestamp, action, entity_type, entity_id, details, prev_hash, hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-            try (Connection conn = db.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
-                ps.setLong(1, seq);
-                ps.setString(2, ts.toString());
-                ps.setString(3, action);
-                ps.setString(4, entityType);
-                ps.setString(5, entityId);
-                ps.setString(6, cleanDetails);
-                ps.setString(7, lastHash);
-                ps.setString(8, hash);
-                ps.executeUpdate();
-            } catch (SQLException e) {
-                throw new StorageException("Failed to insert audit log entry into database: " + e.getMessage(), e);
-            }
-        } else if (storage != null && file != null) {
-            storage.appendLine(file, CsvUtil.join(new String[]{String.valueOf(seq), ts.toString(), action, entityType,
-                    entityId, cleanDetails, lastHash, hash}));
-        }
-
-        lastSeq = seq;
-        lastHash = hash;
-        return entry;
+    public long count() {
+        return db.queryLong("SELECT COUNT(*) FROM audit_log");
     }
 
-    public synchronized List<AuditEntry> readAll() {
-        if (db != null) {
-            String sql = "SELECT seq, timestamp, action, entity_type, entity_id, details, prev_hash, hash FROM audit_log ORDER BY seq ASC";
-            try (Connection conn = db.getConnection(); Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
-                List<AuditEntry> list = new ArrayList<>();
-                while (rs.next()) {
-                    list.add(new AuditEntry(
-                            rs.getLong("seq"),
-                            LocalDateTime.parse(rs.getString("timestamp")),
-                            rs.getString("action"),
-                            rs.getString("entity_type"),
-                            rs.getString("entity_id"),
-                            rs.getString("details"),
-                            rs.getString("prev_hash"),
-                            rs.getString("hash")
-                    ));
-                }
-                return list;
-            } catch (SQLException e) {
-                throw new StorageException("Failed to read audit log from database: " + e.getMessage(), e);
-            }
-        } else if (storage != null && file != null) {
-            return parseCsv(storage.readLines(file));
-        }
-        return Collections.emptyList();
-    }
-
-    public synchronized List<AuditEntry> tail(int n) {
-        if (db != null) {
-            String sql = "SELECT seq, timestamp, action, entity_type, entity_id, details, prev_hash, hash FROM audit_log ORDER BY seq DESC LIMIT ?";
-            try (Connection conn = db.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
-                ps.setInt(1, n);
-                try (ResultSet rs = ps.executeQuery()) {
-                    List<AuditEntry> list = new ArrayList<>();
-                    while (rs.next()) {
-                        list.add(new AuditEntry(
-                                rs.getLong("seq"),
-                                LocalDateTime.parse(rs.getString("timestamp")),
-                                rs.getString("action"),
-                                rs.getString("entity_type"),
-                                rs.getString("entity_id"),
-                                rs.getString("details"),
-                                rs.getString("prev_hash"),
-                                rs.getString("hash")
-                        ));
-                    }
-                    Collections.reverse(list);
-                    return list;
-                }
-            } catch (SQLException e) {
-                throw new StorageException("Failed to tail audit log from database: " + e.getMessage(), e);
-            }
-        } else {
-            List<AuditEntry> all = readAll();
-            return new ArrayList<>(all.subList(Math.max(0, all.size() - n), all.size()));
-        }
-    }
-
-    public synchronized Verification verify() {
-        List<AuditEntry> entries;
-        try {
-            entries = readAll();
-        } catch (StorageException e) {
-            return new Verification(false, 0, 0);
-        }
+    /** Recomputes the whole chain and reports the first row whose position, link or MAC does not check out. */
+    public Verification verify() {
+        List<AuditEntry> entries = readAll();
         String expectedPrev = GENESIS;
         long expectedSeq = 1;
         for (AuditEntry e : entries) {
-            String expectedHash = computeHash(e.prevHash(), e.seq(), e.timestamp(), e.action(), e.entityType(),
+            if (e.seq() != expectedSeq) {
+                return new Verification(false, entries.size(), e.seq(), "row " + expectedSeq + " is missing");
+            }
+            if (!e.prevHash().equals(expectedPrev)) {
+                return new Verification(false, entries.size(), e.seq(), "link to previous row is broken");
+            }
+            String expected = mac(e.prevHash(), e.seq(), e.timestamp(), e.actorId(), e.action(), e.entityType(),
                     e.entityId(), e.details());
-            if (e.seq() != expectedSeq || !e.prevHash().equals(expectedPrev) || !e.hash().equals(expectedHash)) {
-                return new Verification(false, entries.size(), e.seq());
+            if (!java.security.MessageDigest.isEqual(expected.getBytes(StandardCharsets.US_ASCII),
+                    e.hash().getBytes(StandardCharsets.US_ASCII))) {
+                return new Verification(false, entries.size(), e.seq(), "row content was altered");
             }
             expectedPrev = e.hash();
             expectedSeq++;
         }
-        return new Verification(true, entries.size(), 0);
+        return new Verification(true, entries.size(), 0, "chain intact");
     }
 
-    private static List<AuditEntry> parseCsv(List<String> lines) {
-        List<AuditEntry> out = new ArrayList<>();
-        for (int i = 1; i < lines.size(); i++) {
-            if (lines.get(i).isBlank()) {
-                continue;
-            }
-            try {
-                String[] f = CsvUtil.split(lines.get(i));
-                out.add(new AuditEntry(Long.parseLong(f[0]), LocalDateTime.parse(f[1]), f[2], f[3], f[4], f[5], f[6], f[7]));
-            } catch (RuntimeException e) {
-                throw new StorageException("Corrupt audit row " + (i + 1), e);
-            }
-        }
-        return out;
+    private static AuditEntry map(ResultSet rs) throws SQLException {
+        return new AuditEntry(rs.getLong("seq"), LocalDateTime.parse(rs.getString("timestamp")),
+                rs.getString("actor_id"), rs.getString("action"), rs.getString("entity_type"),
+                rs.getString("entity_id"), rs.getString("details"), rs.getString("prev_hash"), rs.getString("hash"));
     }
 
-    private static String computeHash(String prev, long seq, LocalDateTime ts, String action, String type,
-                                      String id, String details) {
-        String payload = String.join("|", prev, String.valueOf(seq), ts.toString(), action, type, id, details);
+    private String mac(String prev, long seq, LocalDateTime ts, String actor, String action, String type, String id,
+                       String details) {
+        String payload = String.join("|", prev, String.valueOf(seq), ts.format(DatabaseManager.TIMESTAMP), actor,
+                action, type, id, details);
         try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(md.digest(payload.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 not available", e);
+            Mac m = Mac.getInstance("HmacSHA256");
+            m.init(key);
+            return HexFormat.of().formatHex(m.doFinal(payload.getBytes(StandardCharsets.UTF_8)));
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException("HmacSHA256 not available", e);
         }
     }
 }

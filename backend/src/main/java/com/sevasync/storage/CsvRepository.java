@@ -1,136 +1,100 @@
 package com.sevasync.storage;
 
 import com.sevasync.contract.Entity;
-import com.sevasync.exception.StorageException;
 import com.sevasync.util.CsvUtil;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import java.util.function.Function;
-import java.util.function.Predicate;
+import java.util.Set;
 
 /**
- * Generic repository persisting entities of one type into a CSV file.
+ * Flat-file archive of entities as CSV, built on {@link FileStorageManager} (BufferedReader / BufferedWriter).
+ * Used for human-readable exports that open in any spreadsheet; the live data stays in SQLite.
  *
- * <p>Rows are kept in memory (a HashMap-backed LinkedHashMap) and every call that changes data rewrites
- * the file atomically. Callers always receive <em>fresh copies</em> built from the stored row, so mutating a
- * returned object never changes stored data until {@link #save(Entity)} is called.</p>
+ * <p>Columns come from each entity's {@link Entity#toMap()}; nested objects are flattened ({@code location.lat}),
+ * lists are joined with {@code |}.
+ *
+ * @param <T> entity type
  */
-public class CsvRepository<T extends Entity> implements Repository<T> {
-    private final FileStorageManager storage;
+public class CsvRepository<T extends Entity> {
+    private final FileStorageManager files;
     private final Path file;
-    private final String[] header;
-    private final Function<String[], T> mapper;
-    private final String idPrefix;
-    private final Map<String, String[]> rows = new LinkedHashMap<>();
 
-    public CsvRepository(FileStorageManager storage, String fileName, String[] header,
-                         Function<String[], T> mapper, String idPrefix) {
-        this.storage = storage;
-        this.file = storage.resolve(fileName);
-        this.header = header.clone();
-        this.mapper = mapper;
-        this.idPrefix = idPrefix;
-        load();
+    public CsvRepository(FileStorageManager files, Path file) {
+        this.files = files;
+        this.file = file;
     }
 
-    private void load() {
-        List<String> lines = storage.readLines(file);
-        for (int i = 1; i < lines.size(); i++) { // line 0 is the header
-            String line = lines.get(i);
-            if (line.isBlank()) {
-                continue;
+    public Path getFile() {
+        return file;
+    }
+
+    /** Writes all entities atomically (temp file + move) and returns the number of data rows. */
+    public int writeAll(Collection<? extends T> entities) {
+        List<Map<String, String>> rows = new ArrayList<>();
+        Set<String> header = new LinkedHashSet<>();
+        for (T e : entities) {
+            Map<String, String> flat = new LinkedHashMap<>();
+            flatten("", e.toMap(), flat);
+            header.addAll(flat.keySet());
+            rows.add(flat);
+        }
+        List<String> lines = new ArrayList<>(rows.size() + 1);
+        String[] cols = header.toArray(new String[0]);
+        lines.add(CsvUtil.join(cols));
+        for (Map<String, String> row : rows) {
+            String[] fields = new String[cols.length];
+            for (int i = 0; i < cols.length; i++) {
+                fields[i] = row.getOrDefault(cols[i], "");
             }
-            try {
-                T entity = mapper.apply(CsvUtil.split(line));
-                rows.put(entity.getId(), entity.toCsvRow());
-            } catch (RuntimeException e) {
-                throw new StorageException("Corrupt row " + (i + 1) + " in " + file.getFileName() + ": " + e.getMessage(), e);
-            }
+            lines.add(CsvUtil.join(fields));
         }
-        if (lines.isEmpty()) {
-            flush();
-        }
-    }
-
-    public synchronized Optional<T> findById(String id) {
-        String[] row = rows.get(id);
-        return row == null ? Optional.empty() : Optional.of(mapper.apply(row.clone()));
-    }
-
-    public synchronized List<T> findAll() {
-        List<T> out = new ArrayList<>(rows.size());
-        for (String[] row : rows.values()) {
-            out.add(mapper.apply(row.clone()));
-        }
-        return out;
-    }
-
-    public List<T> findWhere(Predicate<T> filter) {
-        List<T> out = new ArrayList<>();
-        for (T t : findAll()) {
-            if (filter.test(t)) {
-                out.add(t);
-            }
-        }
-        return out;
-    }
-
-    public synchronized int count() {
+        files.writeLinesAtomically(file, lines);
         return rows.size();
     }
 
-    public synchronized void save(T entity) {
-        rows.put(entity.getId(), entity.toCsvRow());
-        flush();
-    }
-
-    public synchronized void saveAll(Collection<T> entities) {
-        for (T e : entities) {
-            rows.put(e.getId(), e.toCsvRow());
+    /** Reads the file back as one map per row (column name to raw value). */
+    public List<Map<String, String>> readRows() {
+        List<String> lines = files.readLines(file);
+        List<Map<String, String>> out = new ArrayList<>();
+        if (lines.isEmpty()) {
+            return out;
         }
-        flush();
+        String[] header = CsvUtil.split(lines.get(0));
+        for (int i = 1; i < lines.size(); i++) {
+            if (lines.get(i).isBlank()) {
+                continue;
+            }
+            String[] f = CsvUtil.split(lines.get(i));
+            Map<String, String> row = new LinkedHashMap<>();
+            for (int c = 0; c < header.length; c++) {
+                row.put(header[c], c < f.length ? f[c] : "");
+            }
+            out.add(row);
+        }
+        return out;
     }
 
-    /** Replace the complete content (used by backup restore). */
-    public synchronized void replaceAll(Collection<T> entities) {
-        rows.clear();
-        saveAll(entities);
-    }
-
-    /** Next free id such as BAT-0007. Callers hold the domain lock between this call and the save. */
-    public synchronized String nextId() {
-        return nextIds(1).get(0);
-    }
-
-    public synchronized List<String> nextIds(int count) {
-        int max = 0;
-        for (String id : rows.keySet()) {
-            int dash = id.lastIndexOf('-');
-            try {
-                max = Math.max(max, Integer.parseInt(id.substring(dash + 1)));
-            } catch (NumberFormatException ignored) {
-                // foreign id format - ignore
+    private static void flatten(String prefix, Map<String, Object> map, Map<String, String> out) {
+        for (Map.Entry<String, Object> e : map.entrySet()) {
+            String key = prefix.isEmpty() ? e.getKey() : prefix + "." + e.getKey();
+            Object v = e.getValue();
+            if (v instanceof Map<?, ?> nested) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> m = (Map<String, Object>) nested;
+                flatten(key, m, out);
+            } else if (v instanceof Collection<?> c) {
+                List<String> parts = new ArrayList<>();
+                c.forEach(x -> parts.add(String.valueOf(x)));
+                out.put(key, String.join("|", parts));
+            } else {
+                out.put(key, v == null ? "" : String.valueOf(v));
             }
         }
-        List<String> ids = new ArrayList<>(count);
-        for (int i = 1; i <= count; i++) {
-            ids.add(String.format("%s-%04d", idPrefix, max + i));
-        }
-        return ids;
-    }
-
-    private void flush() {
-        List<String> lines = new ArrayList<>(rows.size() + 1);
-        lines.add(CsvUtil.join(header));
-        for (String[] row : rows.values()) {
-            lines.add(CsvUtil.join(row));
-        }
-        storage.writeLinesAtomically(file, lines);
     }
 }

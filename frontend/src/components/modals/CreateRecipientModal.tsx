@@ -1,186 +1,67 @@
-import React, { useState } from 'react';
-import { X, AlertCircle, Check } from 'lucide-react';
-import { NeedLevel, RecipientType } from '../../types';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { api } from '../../services/api';
+import { needLabel, recipientTypeLabel } from '../../lib/format';
+import type { LatLng, NeedLevel, RecipientType } from '../../types';
+import { Modal } from '../ui/Modal';
+import { Button } from '../ui/Button';
+import { Input, Segmented, Select } from '../ui/Field';
+import { errorMessage } from '../../lib/errors';
+import { MapPicker } from '../MapPicker';
 
-interface CreateRecipientModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onSubmit: (data: {
-    name: string;
-    phone: string;
-    email?: string;
-    address?: string;
-    recipientType: string;
-    needLevel: string;
-    dailyCapacity: number;
-  }) => Promise<void>;
-}
-
-export const CreateRecipientModal: React.FC<CreateRecipientModalProps> = ({
-  isOpen,
-  onClose,
-  onSubmit,
-}) => {
+/** Coordinator onboards a recipient organisation after a field visit (already verified). */
+export function CreateRecipientModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const qc = useQueryClient();
   const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
-  const [address, setAddress] = useState('');
+  const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
   const [recipientType, setRecipientType] = useState<RecipientType>('SHELTER');
   const [needLevel, setNeedLevel] = useState<NeedLevel>('HIGH');
-  const [dailyCapacity, setDailyCapacity] = useState(100);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [capacity, setCapacity] = useState('60');
+  const [location, setLocation] = useState<LatLng | null>(null);
 
-  if (!isOpen) return null;
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    try {
-      setLoading(true);
-      await onSubmit({
-        name: name.trim(),
-        phone: phone.trim(),
-        email: email.trim() || undefined,
-        address: address.trim() || undefined,
-        recipientType,
-        needLevel,
-        dailyCapacity: Number(dailyCapacity),
-      });
+  const create = useMutation({
+    mutationFn: () =>
+      api.createUser({
+        role: 'RECIPIENT', name, email, phone, password, recipientType, needLevel,
+        dailyCapacity: Number(capacity), lat: location?.lat, lng: location?.lng,
+      }),
+    onSuccess: (u) => {
+      toast.success(`${u.name} added as a verified recipient`);
+      qc.invalidateQueries({ queryKey: ['users'] });
+      qc.invalidateQueries({ queryKey: ['network'] });
       onClose();
-    } catch (err: any) {
-      setError(err.message || 'Failed to register recipient');
-    } finally {
-      setLoading(false);
-    }
-  };
+    },
+    onError: (e) => toast.error(errorMessage(e)),
+  });
 
   return (
-    <div className="modal-backdrop">
-      <div className="modal-content fade-in">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
-          <div>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#ffffff' }}>Register Recipient Beneficiary</h3>
-            <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-              Add an orphanage, shelter, community kitchen, or NGO
-            </p>
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Add a recipient organisation"
+      subtitle="Verified immediately and included in the next matching run."
+      width="lg"
+      footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button loading={create.isPending} onClick={() => create.mutate()}>Create recipient</Button></>}
+    >
+      <div className="grid gap-5 md:grid-cols-2">
+        <div className="space-y-3.5">
+          <Input label="Organisation name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Railway Night Shelter" />
+          <div className="grid grid-cols-2 gap-3">
+            <Select label="Type" value={recipientType} onChange={(e) => setRecipientType(e.target.value as RecipientType)}>
+              {(Object.keys(recipientTypeLabel) as RecipientType[]).map((t) => <option key={t} value={t}>{recipientTypeLabel[t]}</option>)}
+            </Select>
+            <Input label="Meals per day" type="number" min={1} max={5000} value={capacity} onChange={(e) => setCapacity(e.target.value)} />
           </div>
-          <button onClick={onClose} className="btn btn-secondary btn-icon" style={{ padding: '0.375rem' }}>
-            <X size={18} />
-          </button>
+          <Segmented label="Need level" value={needLevel} onChange={setNeedLevel} options={(['NORMAL', 'HIGH', 'CRITICAL'] as NeedLevel[]).map((n) => ({ value: n, label: needLabel[n] }))} />
+          <Input label="Contact e-mail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <Input label="Mobile" value={phone} onChange={(e) => setPhone(e.target.value)} />
+          <Input label="Temporary password" type="text" value={password} onChange={(e) => setPassword(e.target.value)} hint="8+ characters with a letter and a digit" />
         </div>
-
-        {error && (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            padding: '0.75rem',
-            borderRadius: 'var(--radius-md)',
-            background: 'rgba(244, 63, 94, 0.12)',
-            border: '1px solid rgba(244, 63, 94, 0.3)',
-            color: '#fb7185',
-            fontSize: '0.8125rem',
-            marginBottom: '1rem',
-          }}>
-            <AlertCircle size={16} />
-            <span>{error}</span>
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <div className="input-group">
-            <label className="input-label">Organization / Shelter Name</label>
-            <input
-              type="text"
-              className="input-field"
-              placeholder="e.g. Asha Bhavan Orphanage, Hope Night Shelter"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-            <div className="input-group">
-              <label className="input-label">Phone Number (10 digits)</label>
-              <input
-                type="tel"
-                className="input-field"
-                placeholder="9812345678"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                required
-              />
-            </div>
-
-            <div className="input-group">
-              <label className="input-label">Recipient Category</label>
-              <select
-                className="select-field"
-                value={recipientType}
-                onChange={(e) => setRecipientType(e.target.value as RecipientType)}
-              >
-                <option value="ORPHANAGE">Orphanage</option>
-                <option value="SHELTER">Homeless Shelter</option>
-                <option value="OLD_AGE_HOME">Old Age Home</option>
-                <option value="COMMUNITY_KITCHEN">Community Kitchen</option>
-                <option value="NGO">Relief NGO</option>
-                <option value="SLUM_SCHOOL">Slum School / Center</option>
-              </select>
-            </div>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-            <div className="input-group">
-              <label className="input-label">Urgency Need Level</label>
-              <select
-                className="select-field"
-                value={needLevel}
-                onChange={(e) => setNeedLevel(e.target.value as NeedLevel)}
-              >
-                <option value="CRITICAL">CRITICAL (Top Priority in Engine)</option>
-                <option value="HIGH">HIGH Priority</option>
-                <option value="NORMAL">NORMAL Priority</option>
-              </select>
-            </div>
-
-            <div className="input-group">
-              <label className="input-label">Max Daily Servings Capacity</label>
-              <input
-                type="number"
-                min="1"
-                max="5000"
-                className="input-field"
-                value={dailyCapacity}
-                onChange={(e) => setDailyCapacity(Number(e.target.value))}
-                required
-              />
-            </div>
-          </div>
-
-          <div className="input-group">
-            <label className="input-label">Delivery Address / Destination</label>
-            <input
-              type="text"
-              className="input-field"
-              placeholder="e.g. 14 Gandhi Nagar, Near Town Station"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-            />
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem' }}>
-            <button type="button" onClick={onClose} className="btn btn-secondary" disabled={loading}>
-              Cancel
-            </button>
-            <button type="submit" className="btn btn-primary" disabled={loading}>
-              <Check size={16} />
-              {loading ? 'Registering...' : 'Register Recipient'}
-            </button>
-          </div>
-        </form>
+        <MapPicker value={location} onChange={setLocation} color="#fb7185" />
       </div>
-    </div>
+    </Modal>
   );
-};
+}

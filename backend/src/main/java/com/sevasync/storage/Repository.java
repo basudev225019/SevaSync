@@ -8,8 +8,8 @@ import java.util.Optional;
 import java.util.function.Predicate;
 
 /**
- * Generic repository abstraction for entity persistence.
- * Decouples services from concrete storage mechanisms (SQLite, CSV, in-memory).
+ * Generic repository abstraction. Services depend on this interface only, so the storage engine (SQLite today,
+ * PostgreSQL tomorrow) can be swapped by writing new implementations without touching business code.
  *
  * @param <T> entity type
  */
@@ -19,26 +19,19 @@ public interface Repository<T extends Entity> {
 
     List<T> findAll();
 
-    List<T> findWhere(Predicate<T> filter);
+    /** In-memory filter over {@link #findAll()}; implementations override it with SQL where it matters. */
+    default List<T> findWhere(Predicate<? super T> filter) {
+        return findAll().stream().filter(filter).toList();
+    }
 
-    int count();
+    long count();
 
+    /** Insert or update. */
     void save(T entity);
 
-    void saveAll(Collection<T> entities);
-
-    /**
-     * Replace all entities (used by restore or bulk reset).
-     */
-    void replaceAll(Collection<T> entities);
-
-    /**
-     * Generate the next sequential ID with prefix (e.g., DON-0001, BAT-0001).
-     */
-    String nextId();
-
-    /**
-     * Generate batch IDs.
-     */
-    List<String> nextIds(int count);
+    default void saveAll(Collection<? extends T> entities) {
+        for (T e : entities) {
+            save(e);
+        }
+    }
 }

@@ -5,16 +5,12 @@ import java.util.Map;
 import java.util.Objects;
 
 /** A hostel mess, canteen or event coordinator that logs surplus food. */
-public class Donor extends User {
-    private static final long serialVersionUID = 1L;
+public class Donor extends LocatedUser {
+    private DonorType type;
 
-    public static final String[] CSV_HEADER = {"id", "name", "phone", "email", "address", "donorType", "createdAt"};
-
-    private final DonorType type;
-
-    public Donor(String id, String name, String phone, String email, String address,
-                 DonorType type, LocalDateTime createdAt) {
-        super(id, name, phone, email, address, createdAt);
+    public Donor(String id, String name, String email, String phone, String address, GeoPoint location,
+                 DonorType type, AccountStatus status, LocalDateTime createdAt) {
+        super(id, name, email, phone, address, location, status, createdAt);
         this.type = Objects.requireNonNull(type, "type");
     }
 
@@ -22,9 +18,13 @@ public class Donor extends User {
         return type;
     }
 
+    public void setType(DonorType type) {
+        this.type = Objects.requireNonNull(type);
+    }
+
     @Override
-    public String getRole() {
-        return "DONOR";
+    public Role getRole() {
+        return Role.DONOR;
     }
 
     @Override
@@ -33,18 +33,14 @@ public class Donor extends User {
     }
 
     @Override
-    public String[] toCsvRow() {
-        return new String[]{getId(), getName(), getPhone(), getEmail(), getAddress(),
-                type.name(), getCreatedAt().toString()};
-    }
-
-    public static Donor fromCsv(String[] f) {
-        return new Donor(f[0], f[1], f[2], f[3], f[4], DonorType.valueOf(f[5]), LocalDateTime.parse(f[6]));
+    protected void writeProfile(Map<String, Object> m) {
+        super.writeProfile(m);
+        m.put("donorType", type);
     }
 
     @Override
-    public Map<String, Object> toMap() {
-        Map<String, Object> m = baseMap();
+    public Map<String, Object> toPublicMap() {
+        Map<String, Object> m = super.toPublicMap();
         m.put("donorType", type);
         return m;
     }

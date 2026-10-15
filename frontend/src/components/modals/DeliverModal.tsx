@@ -1,131 +1,56 @@
-import React, { useState } from 'react';
-import { X, Check, AlertCircle } from 'lucide-react';
-import { Dispatch } from '../../types';
+import { useState } from 'react';
+import { Star } from 'lucide-react';
+import { clsx } from 'clsx';
+import { Modal } from '../ui/Modal';
+import { Button } from '../ui/Button';
+import { TextArea } from '../ui/Field';
+import type { Dispatch } from '../../types';
 
-interface DeliverModalProps {
-  isOpen: boolean;
-  onClose: () => void;
+/** Recipient confirms a delivery arrived and rates it (1-5 stars). */
+export function DeliverModal({ dispatch, onClose, onConfirm, busy }: {
   dispatch: Dispatch | null;
-  onConfirm: (dispatchId: string, volunteer: string) => Promise<void>;
-}
-
-export const DeliverModal: React.FC<DeliverModalProps> = ({
-  isOpen,
-  onClose,
-  dispatch,
-  onConfirm,
-}) => {
-  const [volunteer, setVolunteer] = useState('Ravi Kumar');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  if (!isOpen || !dispatch) return null;
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!volunteer.trim()) {
-      setError('Volunteer name is required.');
-      return;
-    }
-    setError(null);
-    try {
-      setLoading(true);
-      await onConfirm(dispatch.id, volunteer.trim());
-      onClose();
-    } catch (err: any) {
-      setError(err.message || 'Delivery confirmation failed');
-    } finally {
-      setLoading(false);
-    }
-  };
+  onClose: () => void;
+  onConfirm: (rating: number, feedback: string) => void;
+  busy?: boolean;
+}) {
+  const [rating, setRating] = useState(5);
+  const [hover, setHover] = useState(0);
+  const [feedback, setFeedback] = useState('');
+  const shown = hover || rating;
+  const words = ['', 'Poor', 'Okay', 'Good', 'Great', 'Excellent'];
 
   return (
-    <div className="modal-backdrop">
-      <div className="modal-content fade-in">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
-          <div>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#ffffff' }}>Confirm Food Hand-Over</h3>
-            <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-              Mark dispatch as successfully delivered to beneficiary
-            </p>
-          </div>
-          <button onClick={onClose} className="btn btn-secondary btn-icon" style={{ padding: '0.375rem' }}>
-            <X size={18} />
+    <Modal
+      open={!!dispatch}
+      onClose={onClose}
+      title="Confirm delivery"
+      subtitle={dispatch ? `${dispatch.servings} servings of ${dispatch.batch?.foodName ?? 'food'} from ${dispatch.donor?.name ?? 'a donor'}` : undefined}
+      width="sm"
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>Not yet</Button>
+          <Button loading={busy} onClick={() => onConfirm(rating, feedback)}>Confirm & rate</Button>
+        </>
+      }
+    >
+      <p className="label">How was it?</p>
+      <div className="flex items-center gap-1" onMouseLeave={() => setHover(0)}>
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button
+            key={n}
+            type="button"
+            onClick={() => setRating(n)}
+            onMouseEnter={() => setHover(n)}
+            className="p-1 transition-transform hover:scale-110"
+            aria-label={`${n} star${n > 1 ? 's' : ''}`}
+            aria-pressed={rating === n}
+          >
+            <Star className={clsx('size-8 transition', n <= shown ? 'fill-saffron-400 text-saffron-400' : 'text-ink-500')} />
           </button>
-        </div>
-
-        {error && (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            padding: '0.75rem',
-            borderRadius: 'var(--radius-md)',
-            background: 'rgba(244, 63, 94, 0.12)',
-            border: '1px solid rgba(244, 63, 94, 0.3)',
-            color: '#fb7185',
-            fontSize: '0.8125rem',
-            marginBottom: '1rem',
-          }}>
-            <AlertCircle size={16} />
-            <span>{error}</span>
-          </div>
-        )}
-
-        <div style={{
-          background: 'rgba(15, 23, 42, 0.8)',
-          border: '1px solid var(--border-subtle)',
-          borderRadius: 'var(--radius-md)',
-          padding: '1rem',
-          marginBottom: '1.25rem',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '0.5rem',
-          fontSize: '0.875rem',
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: 'var(--text-secondary)' }}>Dispatch ID:</span>
-            <span style={{ fontWeight: 700, color: '#ffffff' }}>{dispatch.id}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: 'var(--text-secondary)' }}>Batch:</span>
-            <span>{dispatch.batchId}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: 'var(--text-secondary)' }}>Recipient:</span>
-            <span>{dispatch.recipientId}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: 'var(--text-secondary)' }}>Servings:</span>
-            <span style={{ color: 'var(--emerald)', fontWeight: 700 }}>{dispatch.servings} servings</span>
-          </div>
-        </div>
-
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <div className="input-group">
-            <label className="input-label">Volunteer / Driver Name</label>
-            <input
-              type="text"
-              className="input-field"
-              placeholder="e.g. Ravi, Student Volunteer Squad A"
-              value={volunteer}
-              onChange={(e) => setVolunteer(e.target.value)}
-              required
-              autoFocus
-            />
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem' }}>
-            <button type="button" onClick={onClose} className="btn btn-secondary" disabled={loading}>
-              Cancel
-            </button>
-            <button type="submit" className="btn btn-primary" disabled={loading}>
-              <Check size={16} />
-              {loading ? 'Recording Delivery...' : 'Confirm Delivery'}
-            </button>
-          </div>
-        </form>
+        ))}
+        <span className="ml-3 text-sm font-semibold text-saffron-300">{words[shown]}</span>
       </div>
-    </div>
+      <TextArea className="mt-5" label="A word for the donor (optional)" value={feedback} onChange={(e) => setFeedback(e.target.value)} maxLength={280} placeholder="Still warm, the children loved it!" />
+    </Modal>
   );
-};
+}

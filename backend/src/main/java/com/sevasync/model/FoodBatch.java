@@ -10,11 +10,6 @@ import java.util.Objects;
 
 /** A batch of surplus food logged by a donor. The expiry time is derived, never entered directly. */
 public class FoodBatch implements Entity {
-    private static final long serialVersionUID = 1L;
-
-    public static final String[] CSV_HEADER = {"id", "donorId", "foodName", "category", "vegetarian", "servings",
-            "remainingServings", "preparedAt", "shelfLifeMinutes", "expiresAt", "status", "createdAt"};
-
     private final String id;
     private final String donorId;
     private final String foodName;
@@ -26,11 +21,12 @@ public class FoodBatch implements Entity {
     private final int shelfLifeMinutes;
     private final LocalDateTime expiresAt;
     private BatchStatus status;
+    private final String notes;
     private final LocalDateTime createdAt;
 
     public FoodBatch(String id, String donorId, String foodName, FoodCategory category, boolean vegetarian,
                      int servings, int remainingServings, LocalDateTime preparedAt, int shelfLifeMinutes,
-                     BatchStatus status, LocalDateTime createdAt) {
+                     BatchStatus status, String notes, LocalDateTime createdAt) {
         this.id = Objects.requireNonNull(id);
         this.donorId = Objects.requireNonNull(donorId);
         this.foodName = Objects.requireNonNull(foodName);
@@ -45,6 +41,7 @@ public class FoodBatch implements Entity {
         this.shelfLifeMinutes = shelfLifeMinutes;
         this.expiresAt = preparedAt.plusMinutes(shelfLifeMinutes);
         this.status = Objects.requireNonNull(status);
+        this.notes = notes == null ? "" : notes;
         this.createdAt = Objects.requireNonNull(createdAt);
     }
 
@@ -59,18 +56,8 @@ public class FoodBatch implements Entity {
     public int getShelfLifeMinutes() { return shelfLifeMinutes; }
     public LocalDateTime getExpiresAt() { return expiresAt; }
     public BatchStatus getStatus() { return status; }
+    public String getNotes() { return notes; }
     public LocalDateTime getCreatedAt() { return createdAt; }
-
-    public void setStatus(BatchStatus status) {
-        this.status = Objects.requireNonNull(status);
-    }
-
-    public void setRemainingServings(int remaining) {
-        if (remaining < 0 || remaining > servings) {
-            throw new IllegalArgumentException("remaining must be between 0 and " + servings);
-        }
-        this.remainingServings = remaining;
-    }
 
     public boolean isExpiredAt(LocalDateTime when) {
         return !expiresAt.isAfter(when);
@@ -80,8 +67,22 @@ public class FoodBatch implements Entity {
         return Duration.between(when, expiresAt).toMinutes();
     }
 
+    /** Share of the consumption window still left, from 1.0 (just cooked) to 0.0 (expired). */
+    public double freshness(LocalDateTime when) {
+        double left = Duration.between(when, expiresAt).toSeconds();
+        return Math.max(0, Math.min(1, left / (shelfLifeMinutes * 60.0)));
+    }
+
+    /** Weight of {@code n} servings of this batch in kilograms. */
+    public double kgFor(int n) {
+        return n * category.getKgPerServing();
+    }
+
     /** Reserve {@code n} servings for a dispatch. */
     public void allocate(int n) {
+        if (status != BatchStatus.AVAILABLE) {
+            throw new IllegalStateException("Batch " + id + " is " + status + ", not AVAILABLE");
+        }
         if (n <= 0 || n > remainingServings) {
             throw new IllegalArgumentException("Cannot allocate " + n + " of " + remainingServings);
         }
@@ -91,28 +92,35 @@ public class FoodBatch implements Entity {
         }
     }
 
-    /** Return {@code n} servings to the pool (cancelled dispatch). */
+    /** Return {@code n} servings to the pool (a dispatch was cancelled before pickup). */
     public void release(int n) {
+        if (!status.isOpen()) {
+            return; // an expired or withdrawn batch never comes back
+        }
         if (n <= 0 || remainingServings + n > servings) {
             throw new IllegalArgumentException("Cannot release " + n);
         }
         remainingServings += n;
-        if (status == BatchStatus.ALLOCATED) {
-            status = BatchStatus.AVAILABLE;
+        status = BatchStatus.AVAILABLE;
+    }
+
+    public void markCompleted() {
+        if (status == BatchStatus.ALLOCATED && remainingServings == 0) {
+            status = BatchStatus.COMPLETED;
         }
     }
 
-    @Override
-    public String[] toCsvRow() {
-        return new String[]{id, donorId, foodName, category.name(), String.valueOf(vegetarian),
-                String.valueOf(servings), String.valueOf(remainingServings), preparedAt.toString(),
-                String.valueOf(shelfLifeMinutes), expiresAt.toString(), status.name(), createdAt.toString()};
+    /** @param wastedServings servings that will now never be eaten */
+    public void markExpired(int wastedServings) {
+        if (wastedServings < 0 || wastedServings > servings) {
+            throw new IllegalArgumentException("wasted servings out of range");
+        }
+        remainingServings = wastedServings;
+        status = BatchStatus.EXPIRED;
     }
 
-    public static FoodBatch fromCsv(String[] f) {
-        return new FoodBatch(f[0], f[1], f[2], FoodCategory.valueOf(f[3]), Boolean.parseBoolean(f[4]),
-                Integer.parseInt(f[5]), Integer.parseInt(f[6]), LocalDateTime.parse(f[7]),
-                Integer.parseInt(f[8]), BatchStatus.valueOf(f[10]), LocalDateTime.parse(f[11]));
+    public void markWithdrawn() {
+        status = BatchStatus.WITHDRAWN;
     }
 
     @Override
@@ -129,6 +137,7 @@ public class FoodBatch implements Entity {
         m.put("shelfLifeMinutes", shelfLifeMinutes);
         m.put("expiresAt", expiresAt);
         m.put("status", status);
+        m.put("notes", notes);
         m.put("createdAt", createdAt);
         return m;
     }

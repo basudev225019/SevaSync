@@ -4,6 +4,7 @@ import com.sevasync.exception.ExpiredBatchException;
 import com.sevasync.exception.InvalidInputException;
 import com.sevasync.exception.UnsafeFoodException;
 import com.sevasync.model.FoodCategory;
+import com.sevasync.util.TimeUtil;
 import com.sevasync.validation.SafetyValidator;
 import org.junit.jupiter.api.Test;
 
@@ -14,43 +15,36 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class SafetyValidatorTest {
-    private final TestClock clock = new TestClock(Instant.parse("2026-10-09T12:00:00Z"));
-    private final SafetyValidator validator = new SafetyValidator(clock);
-    private final LocalDateTime now = LocalDateTime.of(2026, 10, 9, 12, 0);
+    private final TestClock clock = new TestClock(Instant.parse("2026-10-09T10:00:00Z"));
+    private final SafetyValidator v = new SafetyValidator(clock);
+    private final LocalDateTime now = TimeUtil.now(clock);
 
     @Test
-    void acceptsFreshBatch() {
-        assertDoesNotThrow(() ->
-                validator.validateNewBatch(FoodCategory.COOKED_MEAL, 50, now.minusMinutes(30), 180));
+    void acceptsFreshFoodWithinItsCategoryWindow() {
+        assertDoesNotThrow(() -> v.validateNewBatch(FoodCategory.COOKED_MEAL, 50, now.minusMinutes(30), 240));
+        assertDoesNotThrow(() -> v.validateNewBatch(FoodCategory.PACKAGED, 10, now.minusHours(10), 2880));
     }
 
     @Test
-    void rejectsExpiredBatch() {
-        assertThrows(ExpiredBatchException.class, () ->
-                validator.validateNewBatch(FoodCategory.COOKED_MEAL, 50, now.minusHours(5), 180));
+    void rejectsShelfLifeLongerThanTheCategoryAllows() {
+        assertThrows(UnsafeFoodException.class,
+                () -> v.validateNewBatch(FoodCategory.COOKED_MEAL, 50, now, 241));
     }
 
     @Test
-    void rejectsShelfLifeAboveCategoryLimit() {
-        assertThrows(UnsafeFoodException.class, () ->
-                validator.validateNewBatch(FoodCategory.COOKED_MEAL, 50, now, 6 * 60));
+    void rejectsExpiredOrNearlyExpiredFood() {
+        assertThrows(ExpiredBatchException.class,
+                () -> v.validateNewBatch(FoodCategory.COOKED_MEAL, 50, now.minusMinutes(240), 240));
+        assertThrows(UnsafeFoodException.class,
+                () -> v.validateNewBatch(FoodCategory.COOKED_MEAL, 50, now.minusMinutes(215), 240));
     }
 
     @Test
-    void rejectsBatchWithTooLittleTimeLeft() {
-        assertThrows(UnsafeFoodException.class, () ->
-                validator.validateNewBatch(FoodCategory.COOKED_MEAL, 50, now.minusMinutes(170), 180));
-    }
-
-    @Test
-    void rejectsBadQuantitiesAndFutureTimes() {
-        assertThrows(InvalidInputException.class, () ->
-                validator.validateNewBatch(FoodCategory.BAKERY, 0, now, 120));
-        assertThrows(InvalidInputException.class, () ->
-                validator.validateNewBatch(FoodCategory.BAKERY, 5001, now, 120));
-        assertThrows(InvalidInputException.class, () ->
-                validator.validateNewBatch(FoodCategory.BAKERY, 10, now, 0));
-        assertThrows(InvalidInputException.class, () ->
-                validator.validateNewBatch(FoodCategory.BAKERY, 10, now.plusHours(2), 120));
+    void rejectsImpossibleQuantitiesAndFutureCooking() {
+        assertThrows(InvalidInputException.class, () -> v.validateNewBatch(FoodCategory.BAKERY, 0, now, 60));
+        assertThrows(InvalidInputException.class, () -> v.validateNewBatch(FoodCategory.BAKERY, 5001, now, 60));
+        assertThrows(InvalidInputException.class,
+                () -> v.validateNewBatch(FoodCategory.BAKERY, 10, now.plusMinutes(30), 60));
+        assertThrows(InvalidInputException.class, () -> v.validateNewBatch(null, 10, now, 60));
     }
 }

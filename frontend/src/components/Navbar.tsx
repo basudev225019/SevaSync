@@ -1,161 +1,83 @@
-import React from 'react';
-import { 
-  Sparkles, 
-  Layers, 
-  Cpu, 
-  Send, 
-  Users, 
-  BarChart3, 
-  ShieldCheck, 
-  RefreshCw
-} from 'lucide-react';
+import { useEffect, useId, useState } from 'react';
+import { Link } from 'react-router';
+import { motion } from 'motion/react';
+import { clsx } from 'clsx';
+import { useAuth } from '../context/AuthContext';
+import { Button } from './ui/Button';
+import Magnet from './reactbits/Magnet';
 
-interface NavbarProps {
-  activeTab: string;
-  setActiveTab: (tab: string) => void;
-  backendOnline: boolean;
-  onLoadDemo: () => void;
-  loadingDemo: boolean;
+export function Logo({ compact }: { compact?: boolean }) {
+  // unique per instance: a gradient id defined inside a hidden copy of the logo would not render elsewhere
+  const gid = `logo-${useId().replace(/:/g, '')}`;
+  return (
+    <Link to="/" className="group inline-flex items-center gap-2.5" aria-label="SevaSync home">
+      <span className="relative grid size-9 place-items-center rounded-xl bg-gradient-to-br from-saffron-400/25 to-leaf-400/15 ring-1 ring-white/10">
+        <svg viewBox="0 0 64 64" className="size-6" aria-hidden>
+          <defs>
+            <linearGradient id={gid} x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stopColor="#fbbf24" />
+              <stop offset="1" stopColor="#34d399" />
+            </linearGradient>
+          </defs>
+          <path d="M18 38c0-9 6.5-16 14-16s14 7 14 16" fill="none" stroke={`url(#${gid})`} strokeWidth="5" strokeLinecap="round" />
+          <path d="M14 42h36" stroke={`url(#${gid})`} strokeWidth="5" strokeLinecap="round" />
+          <circle cx="32" cy="15" r="4" fill="#fbbf24" />
+        </svg>
+      </span>
+      {!compact && (
+        <span className="font-display text-lg font-semibold tracking-tight text-ink-100">
+          Seva<span className="text-gradient">Sync</span>
+        </span>
+      )}
+    </Link>
+  );
 }
 
-export const Navbar: React.FC<NavbarProps> = ({
-  activeTab,
-  setActiveTab,
-  backendOnline,
-  onLoadDemo,
-  loadingDemo,
-}) => {
-  const navItems = [
-    { id: 'dashboard', label: 'Overview', icon: Layers },
-    { id: 'batches', label: 'Food Batches', icon: Sparkles },
-    { id: 'matching', label: 'Smart Matching', icon: Cpu },
-    { id: 'dispatches', label: 'Dispatches', icon: Send },
-    { id: 'partners', label: 'Donors & Recipients', icon: Users },
-    { id: 'impact', label: 'Impact Report', icon: BarChart3 },
-    { id: 'audit', label: 'Audit Trail', icon: ShieldCheck },
-  ];
+/** Floating public navigation that turns into a glass bar once the page scrolls. */
+export function Navbar() {
+  const { user } = useAuth();
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const on = () => setScrolled(window.scrollY > 24);
+    on();
+    window.addEventListener('scroll', on, { passive: true });
+    return () => window.removeEventListener('scroll', on);
+  }, []);
 
   return (
-    <header style={{
-      position: 'sticky',
-      top: 0,
-      zIndex: 100,
-      background: 'rgba(9, 13, 22, 0.82)',
-      backdropFilter: 'blur(16px)',
-      WebkitBackdropFilter: 'blur(16px)',
-      borderBottom: '1px solid var(--border-subtle)',
-    }}>
-      <div style={{
-        maxWidth: '1380px',
-        margin: '0 auto',
-        padding: '0.875rem 1.5rem',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        flexWrap: 'wrap',
-        gap: '1rem',
-      }}>
-        {/* Brand */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}
-             onClick={() => setActiveTab('dashboard')}>
-          <div style={{
-            width: '40px',
-            height: '40px',
-            borderRadius: '12px',
-            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 0 20px rgba(16, 185, 129, 0.35)',
-          }}>
-            <Sparkles size={22} color="#ffffff" />
-          </div>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span style={{ fontSize: '1.25rem', fontWeight: 800, letterSpacing: '-0.02em', color: '#ffffff' }}>
-                SevaSync
-              </span>
-              <span className="badge badge-emerald" style={{ fontSize: '0.65rem', padding: '0.15rem 0.45rem' }}>
-                v1.0 • SQLite
-              </span>
-            </div>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              Campus Food Redistribution & Priority Engine
-            </p>
-          </div>
-        </div>
-
-        {/* Navigation Tabs */}
-        <nav style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.25rem',
-          background: 'rgba(15, 23, 42, 0.6)',
-          padding: '0.25rem',
-          borderRadius: 'var(--radius-lg)',
-          border: '1px solid var(--border-subtle)',
-          overflowX: 'auto',
-          maxWidth: '100%',
-        }}>
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeTab === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => setActiveTab(item.id)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  padding: '0.5rem 0.875rem',
-                  fontSize: '0.8125rem',
-                  fontWeight: isActive ? 600 : 500,
-                  color: isActive ? '#ffffff' : 'var(--text-secondary)',
-                  background: isActive ? 'rgba(255, 255, 255, 0.08)' : 'transparent',
-                  border: isActive ? '1px solid rgba(255, 255, 255, 0.12)' : '1px solid transparent',
-                  borderRadius: 'var(--radius-md)',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                <Icon size={16} color={isActive ? '#34d399' : 'currentColor'} />
-                {item.label}
-              </button>
-            );
-          })}
+    <motion.header
+      initial={{ y: -40, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1], delay: 0.2 }}
+      className="fixed inset-x-0 top-0 z-50 flex justify-center px-4 pt-4"
+    >
+      <div className={clsx('flex w-full max-w-6xl items-center justify-between rounded-2xl px-4 py-2.5 transition-all duration-500', scrolled ? 'glass-strong shadow-2xl' : 'bg-transparent')}>
+        <Logo />
+        <nav className="hidden items-center gap-1 md:flex">
+          {[
+            ['#how', 'How it works'],
+            ['#roles', 'Who it serves'],
+            ['#impact', 'Impact'],
+            ['#trust', 'Trust'],
+          ].map(([href, label]) => (
+            <a key={href} href={href} className="rounded-xl px-3 py-2 text-sm text-ink-300 transition hover:text-ink-100">
+              {label}
+            </a>
+          ))}
         </nav>
-
-        {/* Right Status Controls */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            padding: '0.375rem 0.75rem',
-            background: backendOnline ? 'rgba(16, 185, 129, 0.08)' : 'rgba(244, 63, 94, 0.08)',
-            border: `1px solid ${backendOnline ? 'rgba(16, 185, 129, 0.25)' : 'rgba(244, 63, 94, 0.25)'}`,
-            borderRadius: 'var(--radius-full)',
-            fontSize: '0.75rem',
-            fontWeight: 600,
-            color: backendOnline ? '#34d399' : '#fb7185',
-          }}>
-            <span className="pulse-dot" style={{ backgroundColor: backendOnline ? 'var(--emerald)' : 'var(--rose)' }} />
-            {backendOnline ? 'Backend Online (SQLite)' : 'Backend Offline'}
-          </div>
-
-          <button
-            onClick={onLoadDemo}
-            disabled={loadingDemo}
-            className="btn btn-secondary btn-sm"
-            title="Seed sample hostel mess and shelter data"
-          >
-            <RefreshCw size={14} className={loadingDemo ? 'spin' : ''} />
-            {loadingDemo ? 'Loading...' : 'Demo Data'}
-          </button>
+        <div className="flex items-center gap-2">
+          {user ? (
+            <Link to="/app"><Button size="sm">Open dashboard</Button></Link>
+          ) : (
+            <>
+              <Link to="/login" className="hidden sm:block"><Button size="sm" variant="ghost">Sign in</Button></Link>
+              <Magnet padding={40} magnetStrength={4}>
+                <Link to="/register"><Button size="sm">Join SevaSync</Button></Link>
+              </Magnet>
+            </>
+          )}
         </div>
       </div>
-    </header>
+    </motion.header>
   );
-};
+}
