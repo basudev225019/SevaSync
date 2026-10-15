@@ -1,126 +1,210 @@
 package com.sevasync;
 
+import com.sevasync.exception.AccessDeniedException;
 import com.sevasync.exception.CapacityExceededException;
-import com.sevasync.exception.EntityNotFoundException;
 import com.sevasync.exception.ExpiredBatchException;
-import com.sevasync.exception.InvalidInputException;
+import com.sevasync.exception.IllegalTransitionException;
+import com.sevasync.exception.SevaSyncException;
 import com.sevasync.model.BatchStatus;
 import com.sevasync.model.Dispatch;
 import com.sevasync.model.DispatchStatus;
+import com.sevasync.model.Donor;
 import com.sevasync.model.FoodBatch;
 import com.sevasync.model.FoodCategory;
 import com.sevasync.model.NeedLevel;
 import com.sevasync.model.Recipient;
-import com.sevasync.service.ImpactReportService.ImpactReport;
+import com.sevasync.model.VehicleType;
+import com.sevasync.model.Volunteer;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/** The volunteer workflow end to end through the services and the real database. */
 class DispatchServiceTest {
-    private Fixture f;
-    private String donor;
-    private Recipient recipient;
-
-    @BeforeEach
-    void setUp() throws Exception {
-        f = new Fixture();
-        donor = f.donor();
-        recipient = f.recipient("Asha Home", NeedLevel.HIGH, 100);
-    }
+    private final Fixture f = new Fixture();
 
     @AfterEach
     void tearDown() {
         f.close();
     }
 
-    @Test
-    void deliveryCompletesBatch() throws Exception {
-        FoodBatch b = f.batch(donor, "Rice", FoodCategory.COOKED_MEAL, 40, 10, 180);
-        Dispatch d = f.sys.matching().runMatching().dispatches().get(0);
+    private record Setup(Donor donor, Recipient recipient, FoodBatch batch, Dispatch dispatch) {
+    }
 
-        Dispatch delivered = f.sys.dispatches().markDelivered(d.getId(), "Ravi");
-
-        assertEquals(DispatchStatus.DELIVERED, delivered.getStatus());
-        assertEquals("Ravi", delivered.getVolunteer());
-        assertEquals(BatchStatus.COMPLETED, f.sys.donations().getBatch(b.getId()).getStatus());
-        assertThrows(InvalidInputException.class, () -> f.sys.dispatches().markDelivered(d.getId(), "Ravi"));
+    private Setup oneMatch(int servings) throws SevaSyncException {
+        Donor d = f.donor();
+        Recipient r = f.recipient("Shelter", NeedLevel.HIGH, 200);
+        FoodBatch b = f.batch(d, "Dal Rice", FoodCategory.COOKED_MEAL, servings, 10, 240);
+        List<Dispatch> created = f.match();
+        assertEquals(1, created.size());
+        return new Setup(d, r, b, created.get(0));
     }
 
     @Test
-    void deliveryAfterExpiryIsRefusedAndCancelled() throws Exception {
-        FoodBatch b = f.batch(donor, "Rice", FoodCategory.COOKED_MEAL, 40, 10, 60);
-        Dispatch d = f.sys.matching().runMatching().dispatches().get(0);
-        f.clock.advance(Duration.ofMinutes(55));          // 10 + 55 > 60 -> expired
+    void fullDeliveryCompletesTheBatchAndRecordsTheRating() throws Exception {
+        Setup s = oneMatch(30);
+        Volunteer v = f.volunteer("Arjun", VehicleType.BICYCLE);
 
-        assertThrows(ExpiredBatchException.class, () -> f.sys.dispatches().markDelivered(d.getId(), "Ravi"));
+        f.sys.dispatches().claim(v, s.dispatch().getId());
+        f.clock.advance(Duration.ofMinutes(8));
+        f.sys.dispatches().pickUp(v, s.dispatch().getId());
+        f.clock.advance(Duration.ofMinutes(15));
+        f.sys.dispatches().deliver(v, s.dispatch().getId());
+        assertEquals(BatchStatus.COMPLETED, f.reload(s.batch()).getStatus());
 
-        assertEquals(DispatchStatus.CANCELLED, f.sys.dispatches().get(d.getId()).getStatus());
-        FoodBatch stored = f.sys.donations().getBatch(b.getId());
-        assertEquals(BatchStatus.EXPIRED, stored.getStatus());
-        assertEquals(40, stored.getRemainingServings());   // wasted servings
+        f.sys.dispatches().confirmReceipt(s.recipient(), s.dispatch().getId(), 5, "Still warm");
+        Dispatch done = f.reload(s.dispatch());
+        assertEquals(DispatchStatus.DELIVERED, done.getStatus());
+        assertEquals(5, done.getRating());
+        assertNotNull(done.getConfirmedAt());
+        assertEquals(30, ((Number) f.sys.reports().forUser(v).get("servingsDelivered")).intValue());
     }
 
     @Test
-    void cancelReturnsServingsToThePool() throws Exception {
-        FoodBatch b = f.batch(donor, "Rice", FoodCategory.COOKED_MEAL, 40, 10, 180);
-        Dispatch d = f.sys.matching().runMatching().dispatches().get(0);
-        assertEquals(BatchStatus.ALLOCATED, f.sys.donations().getBatch(b.getId()).getStatus());
+    void vehicleSizeAndConcurrentPickupsAreLimited() throws Exception {
+        Setup big = oneMatch(60);
+        Volunteer walker = f.volunteer("Rahul", VehicleType.WALK);
+        assertThrows(CapacityExceededException.class, () -> f.sys.dispatches().claim(walker, big.dispatch().getId()));
 
-        f.sys.dispatches().cancel(d.getId(), "Volunteer unavailable");
-
-        FoodBatch stored = f.sys.donations().getBatch(b.getId());
-        assertEquals(BatchStatus.AVAILABLE, stored.getStatus());
-        assertEquals(40, stored.getRemainingServings());
-        assertEquals(100, f.sys.recipients().remainingCapacityToday(recipient));
-    }
-
-    @Test
-    void manualAssignmentEnforcesCapacityRules() throws Exception {
-        FoodBatch b = f.batch(donor, "Rice", FoodCategory.COOKED_MEAL, 150, 10, 180);
-        assertThrows(CapacityExceededException.class,
-                () -> f.sys.dispatches().assignManually(b.getId(), recipient.getId(), 101));   // > recipient capacity
-        f.sys.dispatches().assignManually(b.getId(), recipient.getId(), 100);
-        assertThrows(CapacityExceededException.class,
-                () -> f.sys.dispatches().assignManually(b.getId(), recipient.getId(), 1));     // recipient full
-        Recipient other = f.recipient("Other", NeedLevel.NORMAL, 500);
-        assertThrows(CapacityExceededException.class,
-                () -> f.sys.dispatches().assignManually(b.getId(), other.getId(), 51));        // batch has 50 left
-        assertThrows(EntityNotFoundException.class,
-                () -> f.sys.dispatches().assignManually("BAT-9999", other.getId(), 1));
-    }
-
-    @Test
-    void impactReportAddsUp() throws Exception {
-        FoodBatch b1 = f.batch(donor, "Rice", FoodCategory.COOKED_MEAL, 40, 10, 180);   // expires 14:50
-        FoodBatch b2 = f.batch(donor, "Curry", FoodCategory.COOKED_MEAL, 70, 10, 60);   // expires 12:50 (earliest)
-        f.recipient("Second", NeedLevel.NORMAL, 30);
-        f.sys.matching().runMatching();   // b2 -> Asha 70, b1 -> Asha 30, b1 -> Second 10
-
-        Dispatch toDeliver = null;
-        for (Dispatch d : f.sys.dispatches().list(DispatchStatus.ASSIGNED)) {
-            if (d.getBatchId().equals(b1.getId()) && d.getRecipientId().equals(recipient.getId())) {
-                toDeliver = d;
-            }
+        Volunteer car = f.volunteer("Meera", VehicleType.CAR);
+        f.sys.dispatches().claim(car, big.dispatch().getId());
+        Recipient r2 = f.recipient("Kitchen", NeedLevel.NORMAL, 500);
+        for (int i = 0; i < 3; i++) {
+            f.batch(big.donor(), "Snack " + i, FoodCategory.BAKERY, 10, 5, 300);
         }
-        f.sys.dispatches().markDelivered(toDeliver.getId(), "Ravi");
-        f.clock.advance(Duration.ofMinutes(55));          // b2 expires, its 70-serving dispatch is cancelled
+        List<Dispatch> more = f.match();
+        assertTrue(more.size() >= 3);
+        f.sys.dispatches().claim(car, more.get(0).getId());
+        f.sys.dispatches().claim(car, more.get(1).getId());
+        assertThrows(CapacityExceededException.class, () -> f.sys.dispatches().claim(car, more.get(2).getId()));
+        assertNotNull(r2);
+    }
 
-        assertEquals(1, f.sys.dispatches().expireOverdue());
-        ImpactReport r = f.sys.reports().generate();
+    @Test
+    void anotherVolunteerCannotTakeOverAClaimedPickup() throws Exception {
+        Setup s = oneMatch(20);
+        Volunteer a = f.volunteer("A", VehicleType.BICYCLE);
+        Volunteer b = f.volunteer("B", VehicleType.BICYCLE);
+        f.sys.dispatches().claim(a, s.dispatch().getId());
+        assertThrows(IllegalTransitionException.class, () -> f.sys.dispatches().claim(b, s.dispatch().getId()));
+        assertThrows(IllegalTransitionException.class, () -> f.sys.dispatches().pickUp(b, s.dispatch().getId()));
+        f.sys.dispatches().release(a, s.dispatch().getId());
+        f.sys.dispatches().claim(b, s.dispatch().getId());
+    }
 
-        assertEquals(b1.getServings() + b2.getServings(), r.servingsDonated());
-        assertEquals(30, r.servingsDelivered());
-        assertEquals(10, r.servingsInTransit());
-        assertEquals(70, r.servingsWasted());
-        assertEquals(r.servingsDonated(), r.servingsDelivered() + r.servingsInTransit()
-                + r.servingsAvailable() + r.servingsWasted());
-        assertTrue(r.foodSavedKg() > 0);
-        assertTrue(r.format().contains("SevaSync Impact Report"));
+    @Test
+    void exactlyOneOfManySimultaneousClaimsWins() throws Exception {
+        Setup s = oneMatch(20);
+        int n = 8;
+        List<Volunteer> crew = new java.util.ArrayList<>();
+        for (int i = 0; i < n; i++) {
+            crew.add(f.volunteer("V" + i, VehicleType.SCOOTER));
+        }
+        ExecutorService pool = Executors.newFixedThreadPool(n);
+        CountDownLatch start = new CountDownLatch(1);
+        AtomicInteger wins = new AtomicInteger();
+        List<Future<?>> futures = new java.util.ArrayList<>();
+        for (Volunteer v : crew) {
+            futures.add(pool.submit(() -> {
+                start.await();
+                try {
+                    f.sys.dispatches().claim(v, s.dispatch().getId());
+                    wins.incrementAndGet();
+                } catch (IllegalTransitionException expected) {
+                    // lost the race
+                }
+                return null;
+            }));
+        }
+        start.countDown();
+        for (Future<?> fut : futures) {
+            fut.get(10, TimeUnit.SECONDS);
+        }
+        pool.shutdown();
+        assertEquals(1, wins.get());
+    }
+
+    @Test
+    void foodThatExpiresOnTheWayIsNeverHandedOver() throws Exception {
+        Setup s = oneMatch(20);
+        Volunteer v = f.volunteer("Arjun", VehicleType.BICYCLE);
+        f.sys.dispatches().claim(v, s.dispatch().getId());
+        f.sys.dispatches().pickUp(v, s.dispatch().getId());
+        f.clock.advance(Duration.ofMinutes(240));
+        assertThrows(ExpiredBatchException.class, () -> f.sys.dispatches().deliver(v, s.dispatch().getId()));
+        assertEquals(DispatchStatus.CANCELLED, f.reload(s.dispatch()).getStatus());
+        FoodBatch b = f.reload(s.batch());
+        assertEquals(BatchStatus.EXPIRED, b.getStatus());
+        assertEquals(20, b.getRemainingServings(), "all 20 servings count as wasted");
+    }
+
+    @Test
+    void cancellingBeforePickupReturnsTheFoodToThePool() throws Exception {
+        Setup s = oneMatch(25);
+        f.sys.dispatches().cancel(f.admin, s.dispatch().getId(), "Recipient closed today");
+        FoodBatch b = f.reload(s.batch());
+        assertEquals(BatchStatus.AVAILABLE, b.getStatus());
+        assertEquals(25, b.getRemainingServings());
+    }
+
+    @Test
+    void onlyTheAddressedRecipientMayConfirm() throws Exception {
+        Setup s = oneMatch(20);
+        Recipient other = f.recipient("Other", NeedLevel.NORMAL, 50);
+        Volunteer v = f.volunteer("Arjun", VehicleType.BICYCLE);
+        f.sys.dispatches().claim(v, s.dispatch().getId());
+        f.sys.dispatches().pickUp(v, s.dispatch().getId());
+        f.sys.dispatches().deliver(v, s.dispatch().getId());
+        assertThrows(AccessDeniedException.class,
+                () -> f.sys.dispatches().confirmReceipt(other, s.dispatch().getId(), 5, ""));
+    }
+
+    @Test
+    void rolesOnlyReachTheirOwnActions() throws Exception {
+        Setup s = oneMatch(20);
+        Volunteer v = f.volunteer("Arjun", VehicleType.BICYCLE);
+        assertThrows(AccessDeniedException.class, () -> f.sys.dispatches().cancel(v, s.dispatch().getId(), ""));
+        assertThrows(AccessDeniedException.class, () -> f.sys.matching().run(v, null));
+        assertThrows(AccessDeniedException.class, () -> f.sys.dispatches().cancel(s.recipient(),
+                s.dispatch().getId(), ""));
+        // a donor sees dispatches of their own food, and only those
+        Donor other = f.donor("Other Mess", 0.1, 0.1);
+        assertEquals(1, f.sys.dispatches().listFor(s.donor(), null).size());
+        assertEquals(0, f.sys.dispatches().listFor(other, null).size());
+        assertThrows(AccessDeniedException.class, () -> f.sys.dispatches().get(other, s.dispatch().getId()));
+    }
+
+    @Test
+    void manualAssignmentRespectsCapacity() throws Exception {
+        Donor d = f.donor();
+        Recipient small = f.recipient("Small Home", NeedLevel.CRITICAL, 10);
+        FoodBatch b = f.batch(d, "Khichdi", FoodCategory.COOKED_MEAL, 40, 5, 240);
+        assertThrows(CapacityExceededException.class,
+                () -> f.sys.dispatches().assignManually(f.admin, b.getId(), small.getId(), 15));
+        Dispatch ok = f.sys.dispatches().assignManually(f.admin, b.getId(), small.getId(), 10);
+        assertEquals("manual", ok.getStrategy());
+        assertEquals(30, f.reload(b).getRemainingServings());
+    }
+
+    @Test
+    void openPickupBoardHidesClaimedAndExpiredWork() throws Exception {
+        Setup s = oneMatch(20);
+        Volunteer v = f.volunteer("Arjun", VehicleType.BICYCLE);
+        assertEquals(1, f.sys.dispatches().openPickups(v).size());
+        f.sys.dispatches().claim(v, s.dispatch().getId());
+        assertEquals(0, f.sys.dispatches().openPickups(v).size());
     }
 }

@@ -1,303 +1,335 @@
-import { 
-  Sparkles, 
-  Send, 
-  Leaf, 
-  Clock, 
-  CheckCircle2, 
-  Plus, 
-  Cpu, 
-  ChevronRight,
-  TrendingUp,
-  Heart,
-  HeartHandshake
+import { useState } from 'react';
+import { Link } from 'react-router';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import {
+  ArrowRight,
+  Bike,
+  BrainCircuit,
+  CheckCircle2,
+  Clock3,
+  Gauge,
+  Globe2,
+  HandHeart,
+  Hourglass,
+  Leaf,
+  PackagePlus,
+  Route as RouteIcon,
+  ShieldCheck,
+  Star,
+  Truck,
+  UserCheck,
+  UtensilsCrossed,
+  Weight,
 } from 'lucide-react';
+import { api } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import { StatCard } from '../components/StatCard';
-import { Dispatch, FoodBatch, ImpactReport } from '../types';
+import { PageHeader } from '../components/PageHeader';
+import { Card, CardHeader } from '../components/ui/Card';
+import { Button } from '../components/ui/Button';
+import { EmptyState, ErrorState, Skeleton } from '../components/ui/Feedback';
+import { errorMessage } from '../lib/errors';
+import { Freshness } from '../components/ui/Freshness';
+import { BatchPill } from '../components/ui/StatusPill';
+import { DispatchList } from '../components/DispatchList';
+import { TimelineChart } from '../components/charts/Charts';
+import { CampusScene } from '../components/three/CampusScene';
+import { LiveFeed } from '../components/layout/LiveFeed';
+import { CreateBatchModal } from '../components/modals/CreateBatchModal';
+import StarBorder from '../components/reactbits/StarBorder';
+import { categoryEmoji, num, num1, roleLabel } from '../lib/format';
+import { roleColor } from '../lib/theme';
+import type { PersonalImpact, User } from '../types';
 
-interface DashboardProps {
-  report: ImpactReport | null;
-  batches: FoodBatch[];
-  dispatches: Dispatch[];
-  onOpenCreateBatch: () => void;
-  onOpenCreateRecipient: () => void;
-  onRunMatching: () => void;
-  onNavigateTab: (tab: string) => void;
+function greeting(): string {
+  const h = new Date().getHours();
+  return h < 5 ? 'Working late' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({
-  report,
-  batches,
-  dispatches,
-  onOpenCreateBatch,
-  onOpenCreateRecipient,
-  onRunMatching,
-  onNavigateTab,
-}) => {
-  const availableBatches = batches.filter((b) => b.status === 'AVAILABLE');
-  const activeDispatches = dispatches.filter((d) => d.status === 'ASSIGNED');
+export default function Dashboard() {
+  const { user } = useAuth();
+  const me = useQuery({ queryKey: ['me'], queryFn: api.me, refetchInterval: 60_000 });
+  if (!user) return null;
+  if (user.status === 'PENDING') return <PendingHome user={user} />;
+  const impact = me.data?.impact;
+  switch (user.role) {
+    case 'DONOR':
+      return <DonorHome user={user} impact={impact} />;
+    case 'VOLUNTEER':
+      return <VolunteerHome user={user} impact={impact} />;
+    case 'RECIPIENT':
+      return <RecipientHome user={user} impact={impact} />;
+    default:
+      return <AdminHome user={user} />;
+  }
+}
 
-  // Format time remaining
-  const getTimeRemaining = (expiresAt: string) => {
-    const diff = new Date(expiresAt).getTime() - new Date().getTime();
-    if (diff <= 0) return { text: 'Expired', urgent: true, ratio: 0 };
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    const urgent = hours < 2;
-    return {
-      text: hours > 0 ? `${hours}h ${mins}m left` : `${mins}m left`,
-      urgent,
-      hours,
-    };
-  };
+// ------------------------------------------------------------------ donor
+
+function DonorHome({ user, impact }: { user: User; impact?: PersonalImpact }) {
+  const [logging, setLogging] = useState(false);
+  const batches = useQuery({ queryKey: ['batches', 'mine'], queryFn: () => api.batches() });
+  const dispatches = useQuery({ queryKey: ['dispatches', 'mine'], queryFn: () => api.dispatches() });
+  const open = (batches.data ?? []).filter((b) => b.status === 'AVAILABLE' || b.status === 'ALLOCATED');
+  const moving = (dispatches.data ?? []).filter((d) => d.status === 'CLAIMED' || d.status === 'PICKED_UP');
 
   return (
-    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-      {/* Hero Welcome Banner */}
-      <div
-        className="glass-panel"
-        style={{
-          padding: '2rem',
-          background: 'radial-gradient(ellipse at top left, rgba(16, 185, 129, 0.15) 0%, rgba(15, 23, 42, 0.8) 70%)',
-          border: '1px solid rgba(16, 185, 129, 0.25)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '1.5rem',
-        }}
-      >
-        <div style={{ maxWidth: '680px' }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
-            <span className="badge badge-emerald">
-              <Sparkles size={12} />
-              Zero Campus Food Waste Initiative
-            </span>
-            <span className="badge badge-indigo">
-              Real-time SQLite Storage
-            </span>
-          </div>
-          <h1 style={{ fontSize: '2.25rem', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.03em', lineHeight: 1.2, marginBottom: '0.75rem' }}>
-            Smart Redistribution & Freshness Engine
-          </h1>
-          <p style={{ fontSize: '0.9375rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-            Intelligently pairs soonest-expiring hostel mess surplus with high-need campus beneficiaries. Powered by double priority-queues and cryptographic audit trails.
-          </p>
-        </div>
-
-        {/* Quick Action Buttons */}
-        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-          <button onClick={onOpenCreateBatch} className="btn btn-primary">
-            <Plus size={16} />
-            Log Surplus Food
+    <>
+      <PageHeader
+        eyebrow={roleLabel.DONOR}
+        accent={roleColor.DONOR}
+        title={`${greeting()}, ${user.name}`}
+        description="Log what is left over and SevaSync takes it from there: safety check, matching and a volunteer at your door."
+        actions={
+          <button onClick={() => setLogging(true)}>
+            <StarBorder as="span" color="#fbbf24" duration={4} backgroundColor="#0e121b" textColor="#f4f6fb" className="inline-block">
+              <span className="flex items-center gap-2 font-semibold"><PackagePlus className="size-4" /> Log surplus</span>
+            </StarBorder>
           </button>
-          <button onClick={onOpenCreateRecipient} className="btn btn-secondary">
-            <HeartHandshake size={16} />
-            Register Beneficiary
-          </button>
-          <button onClick={onRunMatching} className="btn btn-accent">
-            <Cpu size={16} />
-            Run Smart Matching
-          </button>
-        </div>
+        }
+      />
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatCard label="Meals delivered" value={impact?.servingsDelivered} icon={<HandHeart className="size-4" />} accent="#34d399" />
+        <StatCard label="Food rescued" value={impact?.foodSavedKg} decimals={1} suffix="kg" icon={<Weight className="size-4" />} accent="#fbbf24" />
+        <StatCard label="CO₂e avoided" value={impact?.co2AvoidedKg} decimals={1} suffix="kg" icon={<Leaf className="size-4" />} accent="#6ee7b7" />
+        <StatCard label="Avg. rating" value={impact?.averageRating ?? null} decimals={1} suffix="/ 5" icon={<Star className="size-4" />} accent="#fcd581" />
       </div>
 
-      {/* KPI Stats Grid */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-        gap: '1.25rem',
-      }}>
-        <StatCard
-          title="Servings Donated"
-          value={report?.servingsDonated || 0}
-          subtitle="Total surplus meals cataloged"
-          icon={Sparkles}
-          variant="emerald"
-          trend="+100% campus tracked"
-        />
-        <StatCard
-          title="Servings Delivered"
-          value={report?.servingsDelivered || 0}
-          subtitle={`${report?.deliveryRatePercent || 0}% delivery success rate`}
-          icon={Heart}
-          variant="cyan"
-          trend="Delivered to beneficiaries"
-        />
-        <StatCard
-          title="Active Dispatches"
-          value={activeDispatches.length}
-          subtitle={`${activeDispatches.reduce((acc, d) => acc + d.servings, 0)} servings in transit`}
-          icon={Send}
-          variant="amber"
-          trend="Awaiting volunteer delivery"
-        />
-        <StatCard
-          title="Food Saved"
-          value={`${report?.foodSavedKg || 0} kg`}
-          subtitle="Direct waste diverted"
-          icon={Leaf}
-          variant="emerald"
-        />
-        <StatCard
-          title="CO₂e Avoided"
-          value={`${report?.co2AvoidedKg || 0} kg`}
-          subtitle="Greenhouse gas emissions prevented"
-          icon={TrendingUp}
-          variant="indigo"
-        />
-      </div>
-
-      {/* Two Column Section: Expiry Watchlist & In-Transit Dispatches */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.5rem' }}>
-        
-        {/* Urgent Freshness Watchlist */}
-        <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Clock size={18} color="var(--amber)" />
-              <h3 style={{ fontSize: '1.125rem', fontWeight: 700, color: '#ffffff' }}>Freshness Expiry Watchlist</h3>
-            </div>
-            <button
-              onClick={() => onNavigateTab('batches')}
-              className="btn btn-secondary btn-sm"
-              style={{ fontSize: '0.75rem' }}
-            >
-              View All Batches <ChevronRight size={14} />
-            </button>
-          </div>
-
-          {availableBatches.length === 0 ? (
-            <div style={{
-              flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '2.5rem',
-              color: 'var(--text-muted)',
-              textAlign: 'center',
-            }}>
-              <CheckCircle2 size={36} color="var(--emerald)" style={{ marginBottom: '0.75rem', opacity: 0.8 }} />
-              <p style={{ fontWeight: 600, color: '#ffffff' }}>No active surplus batches</p>
-              <p style={{ fontSize: '0.8125rem', marginTop: '0.25rem' }}>All food has been allocated or delivered!</p>
-            </div>
+      <div className="mt-6 grid gap-6 xl:grid-cols-5">
+        <Card className="xl:col-span-3">
+          <CardHeader title="Your food right now" subtitle="Live freshness for everything not yet delivered" icon={<UtensilsCrossed className="size-4" />} action={<Link to="/app/batches"><Button size="sm" variant="ghost" trailing={<ArrowRight className="size-3.5" />}>All</Button></Link>} />
+          {batches.isLoading ? <Skeleton className="h-40" /> : open.length === 0 ? (
+            <EmptyState icon={<PackagePlus className="size-5" />} title="Nothing waiting" action={<Button size="sm" onClick={() => setLogging(true)}>Log surplus</Button>}>
+              When the evening service ends, log what is left and it will be matched within seconds.
+            </EmptyState>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              {availableBatches.slice(0, 4).map((batch) => {
-                const remaining = getTimeRemaining(batch.expiresAt);
-                return (
-                  <div
-                    key={batch.id}
-                    style={{
-                      background: 'rgba(15, 23, 42, 0.6)',
-                      border: `1px solid ${remaining.urgent ? 'rgba(245, 158, 11, 0.3)' : 'var(--border-subtle)'}`,
-                      borderRadius: 'var(--radius-md)',
-                      padding: '0.875rem 1rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: '1rem',
-                    }}
-                  >
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
-                        <span style={{ fontWeight: 700, color: '#ffffff', fontSize: '0.9375rem' }}>
-                          {batch.foodName}
-                        </span>
-                        {batch.vegetarian && (
-                          <span className="badge badge-emerald" style={{ fontSize: '0.65rem' }}>Veg</span>
-                        )}
-                        <span className="badge badge-slate" style={{ fontSize: '0.65rem' }}>{batch.category}</span>
-                      </div>
-                      <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        Donor: {batch.donorId} • {batch.remainingServings} of {batch.servings} servings left
-                      </p>
+            <ul className="space-y-3">
+              {open.map((b) => (
+                <li key={b.id} className="flex items-center gap-4 rounded-2xl border hairline bg-white/[0.02] p-3.5">
+                  <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-white/5 text-lg">{categoryEmoji[b.category]}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="truncate font-semibold text-ink-100">{b.foodName}</p>
+                      <BatchPill status={b.status} />
                     </div>
-
-                    <div style={{ textAlign: 'right' }}>
-                      <span className={`badge ${remaining.urgent ? 'badge-amber' : 'badge-emerald'}`}>
-                        <Clock size={12} />
-                        {remaining.text}
-                      </span>
-                    </div>
+                    <p className="text-xs text-ink-400">{b.servings - b.remainingServings} of {b.servings} servings matched</p>
+                    <Freshness className="mt-2" compact expiresAt={b.expiresAt} shelfLifeMinutes={b.shelfLifeMinutes} />
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Live Active Dispatches */}
-        <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Send size={18} color="var(--indigo)" />
-              <h3 style={{ fontSize: '1.125rem', fontWeight: 700, color: '#ffffff' }}>Active In-Transit Dispatches</h3>
-            </div>
-            <button
-              onClick={() => onNavigateTab('dispatches')}
-              className="btn btn-secondary btn-sm"
-              style={{ fontSize: '0.75rem' }}
-            >
-              Manage Dispatches <ChevronRight size={14} />
-            </button>
-          </div>
-
-          {activeDispatches.length === 0 ? (
-            <div style={{
-              flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '2.5rem',
-              color: 'var(--text-muted)',
-              textAlign: 'center',
-            }}>
-              <CheckCircle2 size={36} color="var(--indigo)" style={{ marginBottom: '0.75rem', opacity: 0.8 }} />
-              <p style={{ fontWeight: 600, color: '#ffffff' }}>No pending dispatches</p>
-              <p style={{ fontSize: '0.8125rem', marginTop: '0.25rem' }}>Run Smart Matching to generate new volunteer dispatches.</p>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              {activeDispatches.slice(0, 4).map((d) => (
-                <div
-                  key={d.id}
-                  style={{
-                    background: 'rgba(15, 23, 42, 0.6)',
-                    border: '1px solid rgba(99, 102, 241, 0.25)',
-                    borderRadius: 'var(--radius-md)',
-                    padding: '0.875rem 1rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
-                      <span style={{ fontWeight: 700, color: '#ffffff', fontSize: '0.875rem' }}>{d.id}</span>
-                      <span className="badge badge-indigo">ASSIGNED</span>
-                    </div>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                      Batch: {d.batchId} → Recipient: {d.recipientId}
-                    </p>
-                  </div>
-
-                  <div style={{ textAlign: 'right' }}>
-                    <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--emerald)' }}>
-                      {d.servings}
-                    </span>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: '0.25rem' }}>
-                      servings
-                    </span>
-                  </div>
-                </div>
+                </li>
               ))}
-            </div>
+            </ul>
           )}
-        </div>
+        </Card>
+        <Card className="xl:col-span-2">
+          <CardHeader title="Last two weeks" subtitle="Your servings donated, delivered and wasted" />
+          {impact?.timeline ? <TimelineChart data={impact.timeline} height={230} /> : <Skeleton className="h-56" />}
+        </Card>
+      </div>
 
+      <section className="mt-8">
+        <h2 className="mb-4 text-lg font-semibold">On the move</h2>
+        {moving.length === 0 ? (
+          <p className="text-sm text-ink-400">No volunteer is carrying your food right now.</p>
+        ) : (
+          <DispatchList items={moving} />
+        )}
+      </section>
+      <CreateBatchModal open={logging} onClose={() => setLogging(false)} />
+    </>
+  );
+}
+
+// ------------------------------------------------------------------ volunteer
+
+function VolunteerHome({ user, impact }: { user: User; impact?: PersonalImpact }) {
+  const mine = useQuery({ queryKey: ['dispatches', 'mine'], queryFn: () => api.dispatches() });
+  const open = useQuery({ queryKey: ['pickups'], queryFn: api.openPickups, refetchInterval: 30_000 });
+  const active = (mine.data ?? []).filter((d) => d.status === 'CLAIMED' || d.status === 'PICKED_UP');
+  const nearest = (open.data ?? []).slice(0, 4);
+
+  return (
+    <>
+      <PageHeader
+        eyebrow={roleLabel.VOLUNTEER}
+        accent={roleColor.VOLUNTEER}
+        title={`${greeting()}, ${user.name.split(' ')[0]}`}
+        description="Pick up food from campus kitchens and carry it to people who need it, before it expires."
+        actions={<Link to="/app/pickups"><Button icon={<Bike className="size-4" />}>Find pickups</Button></Link>}
+      />
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatCard label="Deliveries" value={impact?.deliveries} icon={<CheckCircle2 className="size-4" />} accent="#34d399" />
+        <StatCard label="Meals carried" value={impact?.servingsDelivered} icon={<HandHeart className="size-4" />} accent="#38bdf8" />
+        <StatCard label="Distance" value={impact?.distanceKm} decimals={1} suffix="km" icon={<RouteIcon className="size-4" />} accent="#a78bfa" />
+        <StatCard label="CO₂e avoided" value={impact?.co2AvoidedKg} decimals={1} suffix="kg" icon={<Leaf className="size-4" />} accent="#6ee7b7" />
+      </div>
+
+      <section className="mt-8">
+        <h2 className="mb-4 text-lg font-semibold">Your active runs</h2>
+        {mine.isLoading ? <Skeleton className="h-48" /> : active.length === 0 ? (
+          <EmptyState icon={<Bike className="size-5" />} title="You're free right now" action={<Link to="/app/pickups"><Button size="sm">Browse open pickups</Button></Link>}>
+            Claim a pickup and it will appear here with step-by-step buttons.
+          </EmptyState>
+        ) : (
+          <DispatchList items={active} />
+        )}
+      </section>
+
+      <section className="mt-10">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Nearest open pickups</h2>
+          <Link to="/app/pickups" className="text-sm text-sky-300 hover:underline">See all</Link>
+        </div>
+        {open.isError ? <ErrorState error={open.error} onRetry={() => open.refetch()} /> : nearest.length === 0 ? (
+          <p className="text-sm text-ink-400">No food is waiting for a volunteer. Great news, or a quiet evening.</p>
+        ) : (
+          <DispatchList items={nearest} />
+        )}
+      </section>
+    </>
+  );
+}
+
+// ------------------------------------------------------------------ recipient
+
+function RecipientHome({ user, impact }: { user: User; impact?: PersonalImpact }) {
+  const list = useQuery({ queryKey: ['dispatches', 'mine'], queryFn: () => api.dispatches() });
+  const incoming = (list.data ?? []).filter((d) => d.status === 'ASSIGNED' || d.status === 'CLAIMED' || d.status === 'PICKED_UP');
+  const toConfirm = (list.data ?? []).filter((d) => d.status === 'DELIVERED' && !d.confirmedAt);
+
+  return (
+    <>
+      <PageHeader
+        eyebrow={roleLabel.RECIPIENT}
+        accent={roleColor.RECIPIENT}
+        title={`${greeting()}, ${user.name}`}
+        description="Food matched to you appears here the moment it is assigned, and you can watch it travel."
+      />
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatCard label="Meals received" value={impact?.servingsReceived} icon={<HandHeart className="size-4" />} accent="#fb7185" />
+        <StatCard label="On the way" value={impact?.servingsIncoming} suffix="servings" icon={<Truck className="size-4" />} accent="#fbbf24" />
+        <StatCard label="Food received" value={impact?.foodReceivedKg} decimals={1} suffix="kg" icon={<Weight className="size-4" />} accent="#34d399" />
+        <StatCard label="Daily capacity" value={user.dailyCapacity} suffix="meals" icon={<Gauge className="size-4" />} accent="#a78bfa" />
+      </div>
+
+      {toConfirm.length > 0 && (
+        <section className="mt-8">
+          <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold"><Star className="size-4 text-saffron-300" /> Please confirm these deliveries</h2>
+          <DispatchList items={toConfirm} />
+        </section>
+      )}
+
+      <section className="mt-8">
+        <h2 className="mb-4 text-lg font-semibold">Incoming</h2>
+        {list.isLoading ? <Skeleton className="h-48" /> : incoming.length === 0 ? (
+          <EmptyState icon={<Hourglass className="size-5" />} title="Nothing on the way yet">
+            As soon as a kitchen logs surplus that fits your capacity, it is matched to you automatically.
+          </EmptyState>
+        ) : (
+          <DispatchList items={incoming} />
+        )}
+      </section>
+    </>
+  );
+}
+
+// ------------------------------------------------------------------ coordinator
+
+function AdminHome({ user }: { user: User }) {
+  const qc = useQueryClient();
+  const impact = useQuery({ queryKey: ['impact'], queryFn: api.impact, refetchInterval: 60_000 });
+  const network = useQuery({ queryKey: ['network', 'full'], queryFn: api.network, refetchInterval: 15_000 });
+  const verify = useQuery({ queryKey: ['audit-verify'], queryFn: api.verifyAudit });
+  const run = useMutation({
+    mutationFn: () => api.runMatching(),
+    onSuccess: (r) => {
+      toast.success(r.dispatches.length ? `Matched ${r.allocatedServings} servings into ${r.dispatches.length} pickups` : 'Nothing to match right now');
+      for (const k of ['network', 'dispatches', 'batches']) qc.invalidateQueries({ queryKey: [k] });
+    },
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+  const i = impact.data;
+
+  return (
+    <>
+      <PageHeader
+        eyebrow="Command centre"
+        accent={roleColor.ADMIN}
+        title={`${greeting()}, ${user.name.split(' ')[0]}`}
+        description="Everything moving through SevaSync right now: food, matches, volunteers and the health of the audit chain."
+        actions={
+          <>
+            <Button variant="secondary" icon={<BrainCircuit className="size-4" />} loading={run.isPending} onClick={() => run.mutate()}>Run matching</Button>
+            <Link to="/app/network"><Button icon={<Globe2 className="size-4" />}>Open live map</Button></Link>
+          </>
+        }
+      />
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatCard label="Meals served" value={i?.servingsDelivered} icon={<HandHeart className="size-4" />} accent="#34d399" hint={i && `${num1(i.deliveryRatePercent)}% of settled food delivered`} />
+        <StatCard label="Food rescued" value={i?.foodSavedKg} decimals={1} suffix="kg" icon={<Weight className="size-4" />} accent="#fbbf24" hint={i && `${num1(i.co2AvoidedKg)} kg CO₂e avoided`} />
+        <StatCard label="In transit" value={i?.servingsInTransit} suffix="servings" icon={<Truck className="size-4" />} accent="#38bdf8" hint={i && `${num(i.servingsAvailable)} waiting for a match`} />
+        <StatCard label="Verifications" value={i?.pendingVerifications} icon={<UserCheck className="size-4" />} accent="#a78bfa" hint={<Link to="/app/partners" className="hover:underline">Review partners →</Link>} />
+      </div>
+
+      <div className="mt-6 grid gap-6 xl:grid-cols-3">
+        <Card padded={false} className="relative h-[460px] xl:col-span-2">
+          {network.data ? (
+            <CampusScene network={network.data} className="absolute inset-0" showLabels={false} />
+          ) : (
+            <Skeleton className="absolute inset-0 rounded-none" />
+          )}
+          <div className="pointer-events-none absolute left-5 top-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ink-400">Live network</p>
+            <p className="mt-1 text-sm text-ink-300">
+              {network.data ? `${network.data.routes.length} active routes · ${network.data.batches.length} open batches` : 'Loading…'}
+            </p>
+          </div>
+          <Link to="/app/network" className="absolute bottom-4 right-4"><Button size="sm" variant="secondary" trailing={<ArrowRight className="size-3.5" />}>Full screen</Button></Link>
+        </Card>
+        <Card className="flex flex-col">
+          <CardHeader title="Live activity" subtitle="Streaming from the server" icon={<Clock3 className="size-4" />} />
+          <div className="-mx-2 max-h-[360px] flex-1 overflow-y-auto pr-1"><LiveFeed limit={14} compact /></div>
+        </Card>
+      </div>
+
+      <div className="mt-6 grid gap-6 xl:grid-cols-3">
+        <Card className="xl:col-span-2">
+          <CardHeader title="Last 14 days" subtitle="Servings donated, delivered and wasted" />
+          {i ? <TimelineChart data={i.timeline} /> : <Skeleton className="h-64" />}
+        </Card>
+        <Card spotlight={verify.data?.valid === false ? '#f43f5e40' : '#34d39933'}>
+          <CardHeader title="Audit chain" subtitle="HMAC-SHA-256, recomputed end to end" icon={<ShieldCheck className="size-4" />} />
+          {verify.data ? (
+            <div>
+              <p className={verify.data.valid ? 'font-display text-3xl font-semibold text-leaf-300' : 'font-display text-3xl font-semibold text-rose-300'}>
+                {verify.data.valid ? 'Intact' : 'Tampered'}
+              </p>
+              <p className="mt-1 text-sm text-ink-400">{num(verify.data.entries)} entries · {verify.data.reason}</p>
+              <Link to="/app/audit"><Button className="mt-5" size="sm" variant="secondary" trailing={<ArrowRight className="size-3.5" />}>Open audit trail</Button></Link>
+            </div>
+          ) : verify.isError ? <ErrorState error={verify.error} /> : <Skeleton className="h-24" />}
+        </Card>
+      </div>
+    </>
+  );
+}
+
+// ------------------------------------------------------------------ pending verification
+
+function PendingHome({ user }: { user: User }) {
+  return (
+    <div className="mx-auto max-w-xl py-16 text-center">
+      <div className="mx-auto grid size-16 place-items-center rounded-3xl bg-saffron-400/10 text-saffron-300">
+        <Hourglass className="size-7 animate-float" />
+      </div>
+      <h1 className="mt-6 text-3xl font-semibold">Almost there, {user.name}</h1>
+      <p className="mt-3 text-ink-400">
+        Organisations are verified by the campus coordinator before they can {user.role === 'DONOR' ? 'log food' : 'receive deliveries'}.
+        You'll get access automatically the moment you're approved; this page updates live.
+      </p>
+      <div className="mt-8 flex justify-center gap-3">
+        <Link to="/app/profile"><Button variant="secondary">Complete your profile</Button></Link>
       </div>
     </div>
   );
-};
+}

@@ -4,30 +4,29 @@ import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.Objects;
 
-/** An orphanage, shelter, NGO ... that receives surplus food. */
-public class Recipient extends User {
-    private static final long serialVersionUID = 1L;
+/** An orphanage, shelter, NGO ... that receives surplus food, up to a daily capacity. */
+public class Recipient extends LocatedUser {
+    public static final int MAX_DAILY_CAPACITY = 5000;
 
-    public static final String[] CSV_HEADER = {"id", "name", "phone", "email", "address", "recipientType",
-            "needLevel", "dailyCapacity", "createdAt"};
-
-    private final RecipientType type;
+    private RecipientType type;
     private NeedLevel needLevel;
     private int dailyCapacity;
 
-    public Recipient(String id, String name, String phone, String email, String address,
-                     RecipientType type, NeedLevel needLevel, int dailyCapacity, LocalDateTime createdAt) {
-        super(id, name, phone, email, address, createdAt);
+    public Recipient(String id, String name, String email, String phone, String address, GeoPoint location,
+                     RecipientType type, NeedLevel needLevel, int dailyCapacity, AccountStatus status,
+                     LocalDateTime createdAt) {
+        super(id, name, email, phone, address, location, status, createdAt);
         this.type = Objects.requireNonNull(type, "type");
         this.needLevel = Objects.requireNonNull(needLevel, "needLevel");
-        if (dailyCapacity <= 0) {
-            throw new IllegalArgumentException("dailyCapacity must be positive");
-        }
-        this.dailyCapacity = dailyCapacity;
+        setDailyCapacity(dailyCapacity);
     }
 
     public RecipientType getType() {
         return type;
+    }
+
+    public void setType(RecipientType type) {
+        this.type = Objects.requireNonNull(type);
     }
 
     public NeedLevel getNeedLevel() {
@@ -42,16 +41,16 @@ public class Recipient extends User {
         return dailyCapacity;
     }
 
-    public void setDailyCapacity(int dailyCapacity) {
-        if (dailyCapacity <= 0) {
-            throw new IllegalArgumentException("dailyCapacity must be positive");
+    public final void setDailyCapacity(int dailyCapacity) {
+        if (dailyCapacity <= 0 || dailyCapacity > MAX_DAILY_CAPACITY) {
+            throw new IllegalArgumentException("dailyCapacity must be between 1 and " + MAX_DAILY_CAPACITY);
         }
         this.dailyCapacity = dailyCapacity;
     }
 
     @Override
-    public String getRole() {
-        return "RECIPIENT";
+    public Role getRole() {
+        return Role.RECIPIENT;
     }
 
     @Override
@@ -60,19 +59,16 @@ public class Recipient extends User {
     }
 
     @Override
-    public String[] toCsvRow() {
-        return new String[]{getId(), getName(), getPhone(), getEmail(), getAddress(), type.name(),
-                needLevel.name(), String.valueOf(dailyCapacity), getCreatedAt().toString()};
-    }
-
-    public static Recipient fromCsv(String[] f) {
-        return new Recipient(f[0], f[1], f[2], f[3], f[4], RecipientType.valueOf(f[5]),
-                NeedLevel.valueOf(f[6]), Integer.parseInt(f[7]), LocalDateTime.parse(f[8]));
+    protected void writeProfile(Map<String, Object> m) {
+        super.writeProfile(m);
+        m.put("recipientType", type);
+        m.put("needLevel", needLevel);
+        m.put("dailyCapacity", dailyCapacity);
     }
 
     @Override
-    public Map<String, Object> toMap() {
-        Map<String, Object> m = baseMap();
+    public Map<String, Object> toPublicMap() {
+        Map<String, Object> m = super.toPublicMap();
         m.put("recipientType", type);
         m.put("needLevel", needLevel);
         m.put("dailyCapacity", dailyCapacity);

@@ -1,231 +1,168 @@
-import React, { useState } from 'react';
-import { 
-  Building2, 
-  HeartHandshake, 
-  Plus, 
-  Phone, 
-  Mail, 
-  MapPin, 
-  Calendar 
-} from 'lucide-react';
-import { Donor, Recipient } from '../types';
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { AnimatePresence, motion } from 'motion/react';
+import { Ban, CheckCircle2, HandHeart, Pencil, RotateCcw, UtensilsCrossed, Users } from 'lucide-react';
+import { api } from '../services/api';
+import { PageHeader } from '../components/PageHeader';
+import { Card } from '../components/ui/Card';
+import { Button } from '../components/ui/Button';
+import { Badge } from '../components/ui/Badge';
+import { Avatar } from '../components/ui/Avatar';
+import { Input, Segmented } from '../components/ui/Field';
+import { Modal } from '../components/ui/Modal';
+import { EmptyState, ErrorState, Skeleton } from '../components/ui/Feedback';
+import { errorMessage } from '../lib/errors';
+import { NeedPill } from '../components/ui/StatusPill';
+import { CreateDonorModal } from '../components/modals/CreateDonorModal';
+import { CreateRecipientModal } from '../components/modals/CreateRecipientModal';
+import { donorTypeLabel, needLabel, recipientTypeLabel, roleLabel, timeAgo, vehicleLabel } from '../lib/format';
+import { roleColor } from '../lib/theme';
+import type { AccountStatus, NeedLevel, Role, User } from '../types';
 
-interface PartnersViewProps {
-  donors: Donor[];
-  recipients: Recipient[];
-  onOpenCreateDonor: () => void;
-  onOpenCreateRecipient: () => void;
-}
+type Tab = 'PENDING' | Exclude<Role, 'ADMIN'>;
 
-export const PartnersView: React.FC<PartnersViewProps> = ({
-  donors,
-  recipients,
-  onOpenCreateDonor,
-  onOpenCreateRecipient,
-}) => {
-  const [subTab, setSubTab] = useState<'recipients' | 'donors'>('recipients');
+export default function PartnersView() {
+  const [tab, setTab] = useState<Tab>('PENDING');
+  const [adding, setAdding] = useState<'donor' | 'recipient' | null>(null);
+  const [editing, setEditing] = useState<User | null>(null);
+  const users = useQuery({ queryKey: ['users'], queryFn: () => api.users() });
+  const all = (users.data ?? []).filter((u) => u.role !== 'ADMIN');
+  const pending = all.filter((u) => u.status === 'PENDING');
+  const items = tab === 'PENDING' ? pending : all.filter((u) => u.role === tab);
 
   return (
-    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      {/* Header bar */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
-        <div>
-          <h2 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.02em' }}>
-            Campus Community Partners
-          </h2>
-          <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-            Network of registered food donors and community beneficiary shelters
-          </p>
+    <>
+      <PageHeader
+        eyebrow="Partners"
+        accent={roleColor.ADMIN}
+        title="Kitchens, shelters and volunteers"
+        description="Verify organisations before they go live, adjust need levels after field visits, and suspend accounts if something goes wrong."
+        actions={
+          <>
+            <Button variant="secondary" icon={<UtensilsCrossed className="size-4" />} onClick={() => setAdding('donor')}>Add kitchen</Button>
+            <Button icon={<HandHeart className="size-4" />} onClick={() => setAdding('recipient')}>Add recipient</Button>
+          </>
+        }
+      />
+      <Segmented
+        className="mb-6 max-w-2xl"
+        value={tab}
+        onChange={setTab}
+        options={[
+          { value: 'PENDING', label: `Awaiting verification (${pending.length})`, color: '#fbbf24' },
+          { value: 'DONOR', label: 'Kitchens', color: roleColor.DONOR },
+          { value: 'RECIPIENT', label: 'Recipients', color: roleColor.RECIPIENT },
+          { value: 'VOLUNTEER', label: 'Volunteers', color: roleColor.VOLUNTEER },
+        ]}
+      />
+      {users.isError ? <ErrorState error={users.error} onRetry={() => users.refetch()} /> : users.isLoading ? (
+        <div className="grid gap-4 md:grid-cols-2">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-36" />)}</div>
+      ) : items.length === 0 ? (
+        <EmptyState icon={<Users className="size-5" />} title={tab === 'PENDING' ? 'Nobody is waiting' : 'No partners yet'}>
+          {tab === 'PENDING' ? 'New kitchens and shelters that sign up will appear here for verification.' : 'Use the buttons above to add one.'}
+        </EmptyState>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <AnimatePresence initial={false}>
+            {items.map((u) => <PartnerCard key={u.id} u={u} onEdit={() => setEditing(u)} />)}
+          </AnimatePresence>
         </div>
+      )}
+      <CreateDonorModal open={adding === 'donor'} onClose={() => setAdding(null)} />
+      <CreateRecipientModal open={adding === 'recipient'} onClose={() => setAdding(null)} />
+      <EditRecipient user={editing} onClose={() => setEditing(null)} />
+    </>
+  );
+}
 
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
-          {subTab === 'donors' ? (
-            <button onClick={onOpenCreateDonor} className="btn btn-primary">
-              <Plus size={16} />
-              Register New Donor
-            </button>
-          ) : (
-            <button onClick={onOpenCreateRecipient} className="btn btn-primary">
-              <Plus size={16} />
-              Register New Recipient
-            </button>
+const STATUS_COLOR: Record<AccountStatus, string> = { ACTIVE: '#34d399', PENDING: '#fbbf24', SUSPENDED: '#f43f5e' };
+
+function PartnerCard({ u, onEdit }: { u: User; onEdit: () => void }) {
+  const qc = useQueryClient();
+  const setStatus = useMutation({
+    mutationFn: (status: AccountStatus) => api.setUserStatus(u.id, status),
+    onSuccess: (x) => {
+      toast.success(`${x.name} is now ${x.status.toLowerCase()}`);
+      qc.invalidateQueries({ queryKey: ['users'] });
+      qc.invalidateQueries({ queryKey: ['network'] });
+      qc.invalidateQueries({ queryKey: ['impact'] });
+    },
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+  const detail =
+    u.role === 'DONOR' && u.donorType ? donorTypeLabel[u.donorType]
+      : u.role === 'RECIPIENT' && u.recipientType ? `${recipientTypeLabel[u.recipientType]} · ${u.dailyCapacity} meals/day`
+        : u.role === 'VOLUNTEER' && u.vehicle ? vehicleLabel[u.vehicle] : roleLabel[u.role];
+
+  return (
+    <motion.div layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }}>
+      <Card className="h-full">
+        <div className="flex items-start gap-3">
+          <Avatar name={u.name} role={u.role} size={42} />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="truncate font-semibold">{u.name}</h3>
+              <Badge color={STATUS_COLOR[u.status]} dot>{u.status.toLowerCase()}</Badge>
+            </div>
+            <p className="truncate text-xs text-ink-400">{detail}</p>
+            <p className="mt-1 truncate text-xs text-ink-500">{u.email} · {u.phone} · joined {timeAgo(u.createdAt)}</p>
+            {u.role === 'RECIPIENT' && u.needLevel && <div className="mt-2"><NeedPill level={u.needLevel} /></div>}
+          </div>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {u.status === 'PENDING' && (
+            <>
+              <Button size="sm" variant="success" icon={<CheckCircle2 className="size-3.5" />} loading={setStatus.isPending} onClick={() => setStatus.mutate('ACTIVE')}>Verify</Button>
+              <Button size="sm" variant="danger" icon={<Ban className="size-3.5" />} disabled={setStatus.isPending} onClick={() => setStatus.mutate('SUSPENDED')}>Reject</Button>
+            </>
+          )}
+          {u.status === 'ACTIVE' && (
+            <Button size="sm" variant="ghost" icon={<Ban className="size-3.5" />} loading={setStatus.isPending} onClick={() => setStatus.mutate('SUSPENDED')}>Suspend</Button>
+          )}
+          {u.status === 'SUSPENDED' && (
+            <Button size="sm" variant="secondary" icon={<RotateCcw className="size-3.5" />} loading={setStatus.isPending} onClick={() => setStatus.mutate('ACTIVE')}>Reactivate</Button>
+          )}
+          {u.role === 'RECIPIENT' && (
+            <Button size="sm" variant="ghost" icon={<Pencil className="size-3.5" />} onClick={onEdit}>Need & capacity</Button>
           )}
         </div>
-      </div>
-
-      {/* Subtab Switcher */}
-      <div style={{ display: 'flex', gap: '0.5rem', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '0.75rem' }}>
-        <button
-          onClick={() => setSubTab('recipients')}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            padding: '0.625rem 1.25rem',
-            borderRadius: 'var(--radius-md)',
-            background: subTab === 'recipients' ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
-            border: subTab === 'recipients' ? '1px solid rgba(99, 102, 241, 0.3)' : '1px solid transparent',
-            color: subTab === 'recipients' ? '#818cf8' : 'var(--text-secondary)',
-            fontWeight: 700,
-            cursor: 'pointer',
-          }}
-        >
-          <HeartHandshake size={18} />
-          Recipient Beneficiaries ({recipients.length})
-        </button>
-
-        <button
-          onClick={() => setSubTab('donors')}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            padding: '0.625rem 1.25rem',
-            borderRadius: 'var(--radius-md)',
-            background: subTab === 'donors' ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
-            border: subTab === 'donors' ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid transparent',
-            color: subTab === 'donors' ? '#34d399' : 'var(--text-secondary)',
-            fontWeight: 700,
-            cursor: 'pointer',
-          }}
-        >
-          <Building2 size={18} />
-          Campus Donors ({donors.length})
-        </button>
-      </div>
-
-      {/* Recipients View */}
-      {subTab === 'recipients' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.25rem' }}>
-          {recipients.map((r) => {
-            const used = r.dailyCapacity - (r.remainingCapacityToday ?? r.dailyCapacity);
-            const percent = Math.min(100, (used / r.dailyCapacity) * 100);
-            return (
-              <div
-                key={r.id}
-                className="glass-panel"
-                style={{
-                  padding: '1.5rem',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '1rem',
-                  position: 'relative',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div>
-                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>{r.id}</span>
-                    <h3 style={{ fontSize: '1.125rem', fontWeight: 700, color: '#ffffff', marginTop: '0.125rem' }}>
-                      {r.name}
-                    </h3>
-                    <span className="badge badge-indigo" style={{ fontSize: '0.65rem', marginTop: '0.25rem' }}>
-                      {r.recipientType}
-                    </span>
-                  </div>
-
-                  <span className={`badge ${r.needLevel === 'CRITICAL' ? 'badge-rose' : r.needLevel === 'HIGH' ? 'badge-amber' : 'badge-emerald'}`}>
-                    {r.needLevel} NEED
-                  </span>
-                </div>
-
-                {/* Capacity Meter */}
-                <div style={{
-                  background: 'rgba(15, 23, 42, 0.6)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-md)',
-                  padding: '0.875rem',
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', marginBottom: '0.375rem' }}>
-                    <span style={{ color: 'var(--text-secondary)' }}>Today's Capacity Absorbed:</span>
-                    <span style={{ fontWeight: 700, color: '#ffffff' }}>
-                      {used} / {r.dailyCapacity} servings
-                    </span>
-                  </div>
-                  <div style={{ height: '6px', background: 'rgba(255,255,255,0.06)', borderRadius: '3px', overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${percent}%`, background: 'var(--indigo)', borderRadius: '3px' }} />
-                  </div>
-                  <p style={{ fontSize: '0.7rem', color: 'var(--emerald)', marginTop: '0.375rem', textAlign: 'right' }}>
-                    {r.remainingCapacityToday ?? r.dailyCapacity} servings free today
-                  </p>
-                </div>
-
-                {/* Contact info */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem', fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <Phone size={14} color="var(--text-muted)" />
-                    <span>{r.phone}</span>
-                  </div>
-                  {r.email && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <Mail size={14} color="var(--text-muted)" />
-                      <span>{r.email}</span>
-                    </div>
-                  )}
-                  {r.address && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <MapPin size={14} color="var(--text-muted)" />
-                      <span>{r.address}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Donors View */}
-      {subTab === 'donors' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.25rem' }}>
-          {donors.map((d) => (
-            <div
-              key={d.id}
-              className="glass-panel"
-              style={{
-                padding: '1.5rem',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '1rem',
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                  <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>{d.id}</span>
-                  <h3 style={{ fontSize: '1.125rem', fontWeight: 700, color: '#ffffff', marginTop: '0.125rem' }}>
-                    {d.name}
-                  </h3>
-                </div>
-                <span className="badge badge-emerald">
-                  {d.donorType}
-                </span>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <Phone size={14} color="var(--text-muted)" />
-                  <span>{d.phone}</span>
-                </div>
-                {d.email && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <Mail size={14} color="var(--text-muted)" />
-                    <span>{d.email}</span>
-                  </div>
-                )}
-                {d.address && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <MapPin size={14} color="var(--text-muted)" />
-                    <span>{d.address}</span>
-                  </div>
-                )}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                  <Calendar size={14} />
-                  <span>Joined: {d.createdAt.replace('T', ' ')}</span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+      </Card>
+    </motion.div>
   );
-};
+}
+
+function EditRecipient({ user, onClose }: { user: User | null; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [need, setNeed] = useState<NeedLevel>('NORMAL');
+  const [capacity, setCapacity] = useState('');
+  const [shownFor, setShownFor] = useState<string | null>(null);
+  if (user && shownFor !== user.id) {
+    setShownFor(user.id);
+    setNeed(user.needLevel ?? 'NORMAL');
+    setCapacity(String(user.dailyCapacity ?? ''));
+  }
+  const save = useMutation({
+    mutationFn: () => api.updateUser(user!.id, { needLevel: need, dailyCapacity: Number(capacity) }),
+    onSuccess: () => {
+      toast.success('Recipient updated; matching uses the new values from now on');
+      qc.invalidateQueries({ queryKey: ['users'] });
+      qc.invalidateQueries({ queryKey: ['network'] });
+      onClose();
+    },
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+  return (
+    <Modal
+      open={!!user}
+      onClose={onClose}
+      title={user ? `Adjust ${user.name}` : ''}
+      subtitle="Need level directly changes matching priority. Record why on the audit trail by keeping notes of the visit."
+      width="sm"
+      footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button loading={save.isPending} onClick={() => save.mutate()}>Save</Button></>}
+    >
+      <Segmented label="Need level" value={need} onChange={setNeed} options={(['NORMAL', 'HIGH', 'CRITICAL'] as NeedLevel[]).map((n) => ({ value: n, label: needLabel[n] }))} />
+      <Input className="mt-4" label="Meals per day" type="number" min={1} max={5000} value={capacity} onChange={(e) => setCapacity(e.target.value)} />
+    </Modal>
+  );
+}

@@ -1,204 +1,282 @@
 package com.sevasync.service;
 
-import com.sevasync.model.BatchStatus;
+import com.sevasync.database.DatabaseManager;
+import com.sevasync.event.Audience;
+import com.sevasync.event.EventBus;
+import com.sevasync.exception.InvalidInputException;
+import com.sevasync.exception.SevaSyncException;
+import com.sevasync.matching.Allocation;
+import com.sevasync.matching.MatchContext;
+import com.sevasync.matching.MatchingStrategy;
+import com.sevasync.matching.RecipientSlot;
+import com.sevasync.matching.StrategyRegistry;
 import com.sevasync.model.Dispatch;
+import com.sevasync.model.Donor;
 import com.sevasync.model.FoodBatch;
+import com.sevasync.model.GeoPoint;
+import com.sevasync.model.Permission;
 import com.sevasync.model.Recipient;
+import com.sevasync.model.Role;
+import com.sevasync.model.User;
+import com.sevasync.model.VehicleType;
+import com.sevasync.security.Guard;
 import com.sevasync.storage.AuditLogger;
-import com.sevasync.storage.Repository;
+import com.sevasync.storage.SettingsRepository;
+import com.sevasync.storage.SqliteDispatchRepository;
+import com.sevasync.storage.SqliteDonorRepository;
+import com.sevasync.storage.SqliteFoodBatchRepository;
+import com.sevasync.storage.SqliteRecipientRepository;
 import com.sevasync.util.TimeUtil;
+import com.sevasync.validation.SafetyValidator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.LinkedList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.PriorityQueue;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.Set;
 
 /**
- * Priority-driven matching engine (step 03).
- *
- * <ul>
- *   <li>Batches sit in a {@link PriorityQueue} ordered by <b>earliest expiry first</b> (shortest remaining shelf-life).</li>
- *   <li>Recipients sit in a second {@link PriorityQueue} ordered by <b>need level</b> (CRITICAL first), then by the
- *       free capacity they still have today.</li>
- *   <li>The most urgent batch is handed to the most needy recipient; a batch is split over several recipients when
- *       one cannot take all of it, and a recipient with spare capacity goes back into the queue.</li>
- * </ul>
- * Complexity: O((B + R + A) log (B + R)) for B batches, R recipients and A allocations.
+ * Runs the active {@link MatchingStrategy} over today's open food and recipients (workflow step 2).
+ * {@link #preview} is a dry run; {@link #run} persists the dispatches, batch allocations and audit rows in one
+ * transaction. With auto-matching on, it runs by itself whenever food is logged or a match is cancelled.
  */
 public class MatchingService {
-    /** Batches closer to expiry than this are not worth dispatching any more. */
-    public static final int MIN_DISPATCH_MINUTES = 10;
+    private static final Logger LOG = LoggerFactory.getLogger(MatchingService.class);
 
-    private static final Comparator<FoodBatch> BATCH_ORDER = Comparator
-            .comparing(FoodBatch::getExpiresAt)
-            .thenComparing(Comparator.comparingInt(FoodBatch::getRemainingServings).reversed())
-            .thenComparing(FoodBatch::getId);
-
-    private static final Comparator<Slot> SLOT_ORDER = (a, b) -> {
-        int byNeed = Integer.compare(b.recipient.getNeedLevel().getWeight(), a.recipient.getNeedLevel().getWeight());
-        if (byNeed != 0) {
-            return byNeed;
-        }
-        int byFree = Integer.compare(b.remaining, a.remaining);
-        return byFree != 0 ? byFree : a.recipient.getId().compareTo(b.recipient.getId());
-    };
-
-    /** A recipient together with the servings it can still absorb today. */
-    private static final class Slot {
-        private final Recipient recipient;
-        private int remaining;
-
-        private Slot(Recipient recipient, int remaining) {
-            this.recipient = recipient;
-            this.remaining = remaining;
-        }
-    }
-
-    private record Allocation(String batchId, String recipientId, int servings) {
-    }
-
-    private record Plan(List<Allocation> allocations, Map<String, FoodBatch> touchedBatches, int unallocated,
-                        int batchesConsidered, int recipientsAvailable) {
-    }
-
-    public record MatchResult(boolean committed, List<Dispatch> dispatches, int unallocatedServings,
-                              int batchesConsidered, int recipientsAvailable) {
-        public int allocatedServings() {
-            return dispatches.stream().mapToInt(Dispatch::getServings).sum();
-        }
-
+    /** Outcome of one run or preview. {@code items} are enriched dispatch views. */
+    public record MatchResult(boolean committed, String strategy, List<Map<String, Object>> items,
+                              int allocatedServings, int unallocatedServings, int batchesConsidered,
+                              int recipientsAvailable, double averageDistanceKm) {
         public Map<String, Object> toMap() {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("committed", committed);
+            m.put("strategy", strategy);
+            m.put("allocatedServings", allocatedServings);
+            m.put("unallocatedServings", unallocatedServings);
             m.put("batchesConsidered", batchesConsidered);
             m.put("recipientsAvailable", recipientsAvailable);
-            m.put("allocatedServings", allocatedServings());
-            m.put("unallocatedServings", unallocatedServings);
-            List<Map<String, Object>> list = new ArrayList<>();
-            for (Dispatch d : dispatches) {
-                list.add(d.toMap());
-            }
-            m.put("dispatches", list);
+            m.put("averageDistanceKm", Math.round(averageDistanceKm * 100) / 100.0);
+            m.put("dispatches", items);
             return m;
         }
     }
 
-    private final Repository<FoodBatch> batches;
-    private final Repository<Recipient> recipients;
-    private final Repository<Dispatch> dispatches;
-    private final RecipientService recipientService;
-    private final DispatchService dispatchService;
-    private final AuditLogger audit;
-    private final Clock clock;
-    private final ReentrantLock lock;
-
-    public MatchingService(Repository<FoodBatch> batches, Repository<Recipient> recipients,
-                           Repository<Dispatch> dispatches, RecipientService recipientService,
-                           DispatchService dispatchService, AuditLogger audit, Clock clock, ReentrantLock lock) {
-        this.batches = batches;
-        this.recipients = recipients;
-        this.dispatches = dispatches;
-        this.recipientService = recipientService;
-        this.dispatchService = dispatchService;
-        this.audit = audit;
-        this.clock = clock;
-        this.lock = lock;
+    private record Plan(List<Allocation> allocations, Map<String, FoodBatch> batchesById,
+                        Map<String, Recipient> recipientsById, Map<String, Donor> donorsById, int offered,
+                        int batchesConsidered, int recipientsAvailable) {
     }
 
-    /** Dry run: shows what {@link #runMatching()} would do without saving anything. */
-    public MatchResult preview() {
-        lock.lock();
+    private final DatabaseManager db;
+    private final SqliteFoodBatchRepository batches;
+    private final SqliteDispatchRepository dispatches;
+    private final SqliteRecipientRepository recipients;
+    private final SqliteDonorRepository donors;
+    private final RecipientService capacity;
+    private final DispatchService dispatchService;
+    private final StrategyRegistry strategies;
+    private final SettingsRepository settings;
+    private final ViewAssembler views;
+    private final AuditLogger audit;
+    private final EventBus events;
+    private final Clock clock;
+
+    public MatchingService(DatabaseManager db, SqliteFoodBatchRepository batches, SqliteDispatchRepository dispatches,
+                           SqliteRecipientRepository recipients, SqliteDonorRepository donors,
+                           RecipientService capacity, DispatchService dispatchService, StrategyRegistry strategies,
+                           SettingsRepository settings, ViewAssembler views, AuditLogger audit, EventBus events,
+                           Clock clock) {
+        this.db = db;
+        this.batches = batches;
+        this.dispatches = dispatches;
+        this.recipients = recipients;
+        this.donors = donors;
+        this.capacity = capacity;
+        this.dispatchService = dispatchService;
+        this.strategies = strategies;
+        this.settings = settings;
+        this.views = views;
+        this.audit = audit;
+        this.events = events;
+        this.clock = clock;
+    }
+
+    // ------------------------------------------------------------------ settings
+
+    public MatchingStrategy activeStrategy() {
+        String id = settings.get(SettingsRepository.MATCHING_STRATEGY, StrategyRegistry.DEFAULT);
         try {
-            LocalDateTime now = TimeUtil.now(clock);
-            Plan plan = plan(now);
-            List<Dispatch> out = new ArrayList<>();
-            int i = 1;
-            for (Allocation a : plan.allocations()) {
-                out.add(Dispatch.assigned("PREVIEW-" + i++, a.batchId(), a.recipientId(), a.servings(), now));
-            }
-            return new MatchResult(false, out, plan.unallocated(), plan.batchesConsidered(), plan.recipientsAvailable());
-        } finally {
-            lock.unlock();
+            return strategies.get(id);
+        } catch (InvalidInputException e) {
+            return strategies.all().get(0);
         }
     }
 
-    /** Runs the matching engine and persists the resulting dispatches. */
-    public MatchResult runMatching() {
-        lock.lock();
-        try {
-            dispatchService.expireOverdue();
+    public boolean isAutoMatch() {
+        return settings.getBoolean(SettingsRepository.AUTO_MATCH, true);
+    }
+
+    public void configure(User actor, String strategyId, Boolean autoMatch) throws SevaSyncException {
+        Guard.require(actor, Permission.MANAGE_SETTINGS);
+        MatchingStrategy s = strategyId == null ? null : strategies.get(strategyId);
+        db.runInTransaction(() -> {
+            if (s != null) {
+                settings.put(SettingsRepository.MATCHING_STRATEGY, s.id());
+            }
+            if (autoMatch != null) {
+                settings.put(SettingsRepository.AUTO_MATCH, autoMatch.toString());
+            }
+            audit.log(actor.getId(), "SETTINGS_CHANGED", "System", "matching",
+                    "strategy=" + activeStrategy().id() + ", auto=" + isAutoMatch());
+            events.publish("SETTINGS_CHANGED", "System", "matching", "Matching now uses "
+                    + activeStrategy().displayName(), Map.of("strategy", activeStrategy().id()), Audience.admins());
+        });
+    }
+
+    public Map<String, Object> describeSettings() {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("activeStrategy", activeStrategy().id());
+        m.put("autoMatch", isAutoMatch());
+        m.put("strategies", strategies.describe());
+        return m;
+    }
+
+    // ------------------------------------------------------------------ running
+
+    public MatchResult preview(User actor, String strategyId) throws SevaSyncException {
+        Guard.require(actor, Permission.RUN_MATCHING);
+        MatchingStrategy strategy = strategyId == null ? activeStrategy() : strategies.get(strategyId);
+        return db.inTransaction(() -> {
             LocalDateTime now = TimeUtil.now(clock);
-            Plan plan = plan(now);
-            List<String> ids = dispatches.nextIds(plan.allocations().size());
+            Plan plan = plan(strategy, now);
+            List<Dispatch> preview = new ArrayList<>();
+            int i = 1;
+            for (Allocation a : plan.allocations()) {
+                preview.add(Dispatch.assigned("PREVIEW-" + i++, a.batchId(), a.recipientId(), a.servings(),
+                        strategy.id(), a.distanceKm(), now));
+            }
+            return result(false, strategy, preview, plan);
+        });
+    }
+
+    public MatchResult run(User actor, String strategyId) throws SevaSyncException {
+        Guard.require(actor, Permission.RUN_MATCHING);
+        MatchingStrategy strategy = strategyId == null ? activeStrategy() : strategies.get(strategyId);
+        return execute(strategy, actor.getId());
+    }
+
+    /** Called after food is logged or released; does nothing when auto-matching is switched off. */
+    public void autoMatch() {
+        if (!isAutoMatch()) {
+            return;
+        }
+        try {
+            MatchResult r = execute(activeStrategy(), AuditLogger.SYSTEM);
+            if (r.allocatedServings() > 0) {
+                LOG.info("Auto-match created {} dispatches ({} servings)", r.items().size(), r.allocatedServings());
+            }
+        } catch (RuntimeException e) {
+            LOG.warn("Auto-match failed: {}", e.toString());
+        }
+    }
+
+    private MatchResult execute(MatchingStrategy strategy, String actorId) {
+        dispatchService.expireOverdue();
+        return db.inTransaction(() -> {
+            LocalDateTime now = TimeUtil.now(clock);
+            Plan plan = plan(strategy, now);
             List<Dispatch> created = new ArrayList<>();
-            for (int i = 0; i < plan.allocations().size(); i++) {
-                Allocation a = plan.allocations().get(i);
-                created.add(Dispatch.assigned(ids.get(i), a.batchId(), a.recipientId(), a.servings(), now));
+            for (Allocation a : plan.allocations()) {
+                FoodBatch b = plan.batchesById().get(a.batchId());
+                b.allocate(a.servings()); // throws if a strategy ever over-allocates, rolling everything back
+                Dispatch d = Dispatch.assigned(dispatches.nextId(), a.batchId(), a.recipientId(), a.servings(),
+                        strategy.id(), a.distanceKm(), now);
+                created.add(d);
             }
             if (!created.isEmpty()) {
                 dispatches.saveAll(created);
-                batches.saveAll(plan.touchedBatches().values());
+                Set<FoodBatch> touched = new LinkedHashSet<>();
+                for (Allocation a : plan.allocations()) {
+                    touched.add(plan.batchesById().get(a.batchId()));
+                }
+                batches.saveAll(touched);
                 for (Dispatch d : created) {
-                    audit.log("DISPATCH_ASSIGNED", "Dispatch", d.getId(),
-                            d.getServings() + " servings of " + d.getBatchId() + " -> " + d.getRecipientId() + " (auto)");
+                    FoodBatch b = plan.batchesById().get(d.getBatchId());
+                    audit.log(actorId, "DISPATCH_ASSIGNED", "Dispatch", d.getId(), d.getServings() + " servings of "
+                            + b.getFoodName() + " -> " + d.getRecipientId() + " (" + strategy.id() + ")");
+                    events.publish("DISPATCH_ASSIGNED", "Dispatch", d.getId(), "New pickup: " + d.getServings()
+                                    + " servings of " + b.getFoodName(),
+                            Map.of("status", d.getStatus(), "batchId", b.getId(), "servings", d.getServings()),
+                            Audience.roles(Role.VOLUNTEER).and(Audience.users(d.getRecipientId(), b.getDonorId())));
                 }
             }
-            MatchResult result = new MatchResult(true, created, plan.unallocated(), plan.batchesConsidered(),
-                    plan.recipientsAvailable());
-            audit.log("MATCHING_RUN", "System", "-", created.size() + " dispatches, " + result.allocatedServings()
-                    + " servings allocated, " + plan.unallocated() + " unallocated");
+            MatchResult result = result(true, strategy, created, plan);
+            audit.log(actorId, "MATCHING_RUN", "System", strategy.id(), created.size() + " dispatches, "
+                    + result.allocatedServings() + " servings matched, " + result.unallocatedServings() + " waiting");
+            if (!created.isEmpty()) {
+                events.publish("MATCHING_RUN", "System", strategy.id(), "Matched " + result.allocatedServings()
+                        + " servings to " + created.size() + " pickups", Map.of("dispatches", created.size()),
+                        Audience.admins());
+            }
             return result;
-        } finally {
-            lock.unlock();
-        }
+        });
     }
 
-    private Plan plan(LocalDateTime now) {
-        PriorityQueue<FoodBatch> batchQueue = new PriorityQueue<>(BATCH_ORDER);
-        for (FoodBatch b : batches.findAll()) {
-            if (b.getStatus() == BatchStatus.AVAILABLE && b.getRemainingServings() > 0
-                    && b.minutesRemaining(now) >= MIN_DISPATCH_MINUTES) {
-                batchQueue.add(b);
-            }
+    private Plan plan(MatchingStrategy strategy, LocalDateTime now) {
+        List<FoodBatch> open = batches.findMatchable(now.plusMinutes(SafetyValidator.MIN_DISPATCH_MINUTES));
+        Map<String, Donor> donorsById = new HashMap<>();
+        Map<String, GeoPoint> donorLocations = new HashMap<>();
+        for (Donor d : donors.findAll()) {
+            donorsById.put(d.getId(), d);
+            donorLocations.put(d.getId(), d.getLocation());
         }
-        int considered = batchQueue.size();
-
-        Map<String, Integer> used = recipientService.usedTodayByRecipient();
-        PriorityQueue<Slot> slotQueue = new PriorityQueue<>(SLOT_ORDER);
-        for (Recipient r : recipients.findAll()) {
-            int free = r.getDailyCapacity() - used.getOrDefault(r.getId(), 0);
+        Map<String, Integer> today = capacity.usedToday();
+        Map<String, Integer> week = capacity.usedLastWeek();
+        List<RecipientSlot> slots = new ArrayList<>();
+        Map<String, Recipient> recipientsById = new HashMap<>();
+        for (Recipient r : recipients.findActive()) {
+            recipientsById.put(r.getId(), r);
+            int free = capacity.remainingToday(r, today);
             if (free > 0) {
-                slotQueue.add(new Slot(r, free));
+                slots.add(new RecipientSlot(r, free, week.getOrDefault(r.getId(), 0)));
             }
         }
-        int recipientsAvailable = slotQueue.size();
+        Map<String, FoodBatch> batchesById = new LinkedHashMap<>();
+        int offered = 0;
+        for (FoodBatch b : open) {
+            batchesById.put(b.getId(), b);
+            offered += b.getRemainingServings();
+        }
+        MatchContext ctx = new MatchContext(now, donorLocations, SafetyValidator.MIN_DISPATCH_MINUTES,
+                VehicleType.BICYCLE);
+        List<Allocation> allocations = strategy.allocate(open, slots, ctx);
+        return new Plan(allocations, batchesById, recipientsById, donorsById, offered, open.size(), slots.size());
+    }
 
-        List<Allocation> allocations = new ArrayList<>();
-        Map<String, FoodBatch> touched = new LinkedHashMap<>();
-        int unallocated = 0;
-        while (!batchQueue.isEmpty()) {
-            FoodBatch batch = batchQueue.poll();
-            LinkedList<Slot> withSpareCapacity = new LinkedList<>();
-            while (batch.getRemainingServings() > 0 && !slotQueue.isEmpty()) {
-                Slot slot = slotQueue.poll();
-                int give = Math.min(batch.getRemainingServings(), slot.remaining);
-                allocations.add(new Allocation(batch.getId(), slot.recipient.getId(), give));
-                batch.allocate(give);
-                touched.put(batch.getId(), batch);
-                slot.remaining -= give;
-                if (slot.remaining > 0) {
-                    withSpareCapacity.add(slot);
-                }
-            }
-            slotQueue.addAll(withSpareCapacity);
-            unallocated += batch.getRemainingServings();
+    private MatchResult result(boolean committed, MatchingStrategy strategy, List<Dispatch> list, Plan plan) {
+        int allocated = list.stream().mapToInt(Dispatch::getServings).sum();
+        double avgKm = list.isEmpty() ? 0 : list.stream().mapToDouble(Dispatch::getDistanceKm).average().orElse(0);
+        Map<String, Map<String, Object>> batchViews = new HashMap<>();
+        for (Map<String, Object> v : views.batches(plan.batchesById().values())) {
+            batchViews.put((String) v.get("id"), v);
         }
-        return new Plan(allocations, touched, unallocated, considered, recipientsAvailable);
+        List<Map<String, Object>> items = new ArrayList<>();
+        for (Dispatch d : list) {
+            Map<String, Object> m = d.toMap();
+            FoodBatch b = plan.batchesById().get(d.getBatchId());
+            Recipient r = plan.recipientsById().get(d.getRecipientId());
+            Donor dn = b == null ? null : plan.donorsById().get(b.getDonorId());
+            m.put("batch", batchViews.get(d.getBatchId()));
+            m.put("recipient", r == null ? null : r.toPublicMap());
+            m.put("donor", dn == null ? null : dn.toPublicMap());
+            items.add(m);
+        }
+        return new MatchResult(committed, strategy.id(), items, allocated, Math.max(0, plan.offered() - allocated),
+                plan.batchesConsidered(), plan.recipientsAvailable(), avgKm);
     }
 }

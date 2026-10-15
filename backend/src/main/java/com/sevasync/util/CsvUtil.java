@@ -23,6 +23,10 @@ public final class CsvUtil {
         }
         // records are line based, so line breaks are flattened
         String s = value.replace('\r', ' ').replace('\n', ' ');
+        // a leading = + - @ would be run as a formula when the export is opened in a spreadsheet
+        if (!s.isEmpty() && "=+-@".indexOf(s.charAt(0)) >= 0 && !s.matches("-?\\d+(\\.\\d+)?")) {
+            s = "'" + s;
+        }
         if (s.indexOf(',') >= 0 || s.indexOf('"') >= 0) {
             return '"' + s.replace("\"", "\"\"") + '"';
         }

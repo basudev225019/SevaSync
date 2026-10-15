@@ -1,275 +1,119 @@
-import React from 'react';
-import { 
-  Leaf, 
-  TrendingUp, 
-  Award, 
-  Heart 
-} from 'lucide-react';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { Bike, Clock3, Database, FileSpreadsheet, HandHeart, Leaf, Medal, Trash2, Truck, Weight } from 'lucide-react';
+import { api } from '../services/api';
+import { PageHeader } from '../components/PageHeader';
 import { StatCard } from '../components/StatCard';
-import { ImpactReport } from '../types';
+import { Card, CardHeader } from '../components/ui/Card';
+import { Button } from '../components/ui/Button';
+import { ErrorState, Skeleton } from '../components/ui/Feedback';
+import { errorMessage } from '../lib/errors';
+import { CategoryChart, TimelineChart } from '../components/charts/Charts';
+import { num, num1, strategyLabel } from '../lib/format';
+import { roleColor } from '../lib/theme';
+import type { RankEntry, Role } from '../types';
 
-interface ImpactViewProps {
-  report: ImpactReport | null;
-}
-
-export const ImpactView: React.FC<ImpactViewProps> = ({ report }) => {
-  if (!report) {
-    return (
-      <div className="glass-panel" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-        Loading sustainability & impact analytics...
-      </div>
-    );
-  }
-
-  const totalServings = report.servingsDonated || 1;
-  const deliveredPercent = ((report.servingsDelivered / totalServings) * 100).toFixed(1);
-  const inTransitPercent = ((report.servingsInTransit / totalServings) * 100).toFixed(1);
-  const availablePercent = ((report.servingsAvailable / totalServings) * 100).toFixed(1);
-  const wastedPercent = ((report.servingsWasted / totalServings) * 100).toFixed(1);
+export default function ImpactView() {
+  const impact = useQuery({ queryKey: ['impact'], queryFn: api.impact });
+  const backup = useMutation({
+    mutationFn: api.createBackup,
+    onSuccess: (r) => toast.success(`Database snapshot saved as ${r.file}`),
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+  const exportCsv = useMutation({
+    mutationFn: api.exportCsv,
+    onSuccess: (r) => toast.success(`CSV files written to data/${r.folder}`),
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+  const i = impact.data;
 
   return (
-    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-      {/* Header */}
-      <div>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-          <span className="badge badge-emerald">
-            <Leaf size={12} />
-            Environmental & Social Governance (ESG)
-          </span>
-          <span className="badge badge-indigo">
-            Campus Accountability
-          </span>
-        </div>
-        <h2 style={{ fontSize: '1.875rem', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.02em' }}>
-          Impact & Sustainability Accountability
-        </h2>
-        <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-          Detailed audit figures on food waste diversion, greenhouse gas mitigation, and community nourishment.
-        </p>
+    <>
+      <PageHeader
+        eyebrow="Impact"
+        accent="#34d399"
+        title="What SevaSync has achieved"
+        description="Every figure is computed from the live data on request, never stored separately, so it can't drift."
+        actions={
+          <>
+            <Button variant="secondary" icon={<FileSpreadsheet className="size-4" />} loading={exportCsv.isPending} onClick={() => exportCsv.mutate()}>Export CSV</Button>
+            <Button variant="secondary" icon={<Database className="size-4" />} loading={backup.isPending} onClick={() => backup.mutate()}>Snapshot DB</Button>
+          </>
+        }
+      />
+      {impact.isError && <ErrorState error={impact.error} onRetry={() => impact.refetch()} />}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatCard label="Meals served" value={i?.servingsDelivered} icon={<HandHeart className="size-4" />} accent="#34d399" hint={i && `${num(i.deliveries)} deliveries`} />
+        <StatCard label="Food rescued" value={i?.foodSavedKg} decimals={1} suffix="kg" icon={<Weight className="size-4" />} accent="#fbbf24" />
+        <StatCard label="CO₂e avoided" value={i?.co2AvoidedKg} decimals={1} suffix="kg" icon={<Leaf className="size-4" />} accent="#6ee7b7" hint="planning estimate: 2.5 kg CO₂e per kg" />
+        <StatCard label="Delivery rate" value={i?.deliveryRatePercent} decimals={1} suffix="%" icon={<Truck className="size-4" />} accent="#38bdf8" hint="of food that finished its journey" />
+        <StatCard label="Wasted" value={i?.servingsWasted} suffix="servings" icon={<Trash2 className="size-4" />} accent="#f43f5e" hint={i && `${num1(i.foodWastedKg)} kg expired before delivery`} />
+        <StatCard label="Avg. match → delivery" value={i?.averageDeliveryMinutes} suffix="min" icon={<Clock3 className="size-4" />} accent="#a78bfa" />
+        <StatCard label="Active volunteers" value={i?.volunteers} icon={<Bike className="size-4" />} accent={roleColor.VOLUNTEER} />
+        <StatCard label="Partner organisations" value={i ? i.donors + i.recipients : undefined} icon={<HandHeart className="size-4" />} accent={roleColor.RECIPIENT} />
       </div>
 
-      {/* Main KPI Highlights */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.25rem' }}>
-        <StatCard
-          title="Food Waste Diverted"
-          value={`${report.foodSavedKg} kg`}
-          subtitle="Rescued from landfills"
-          icon={Leaf}
-          variant="emerald"
-          trend="0.35 kg/serving factor"
-        />
-        <StatCard
-          title="CO₂e Avoided"
-          value={`${report.co2AvoidedKg} kg`}
-          subtitle="Emissions mitigation"
-          icon={TrendingUp}
-          variant="indigo"
-          trend="2.5 kg CO₂e/kg food"
-        />
-        <StatCard
-          title="Delivery Success"
-          value={`${report.deliveryRatePercent}%`}
-          subtitle={`${report.servingsDelivered} of ${report.servingsDonated} delivered`}
-          icon={Heart}
-          variant="cyan"
-        />
-        <StatCard
-          title="Beneficiaries Served"
-          value={report.recipientsServed}
-          subtitle={`Across ${report.recipients} registered`}
-          icon={Award}
-          variant="amber"
-        />
+      <div className="mt-6 grid gap-6 xl:grid-cols-3">
+        <Card className="xl:col-span-2">
+          <CardHeader title="Daily flow" subtitle="Last 14 days" />
+          {i ? <TimelineChart data={i.timeline} height={280} /> : <Skeleton className="h-72" />}
+        </Card>
+        <Card>
+          <CardHeader title="By food type" subtitle="Servings donated vs delivered" />
+          {i ? <CategoryChart data={i.categories} height={280} /> : <Skeleton className="h-72" />}
+        </Card>
       </div>
 
-      {/* Servings Lifecycle Distribution */}
-      <div className="glass-panel" style={{ padding: '1.75rem' }}>
-        <h3 style={{ fontSize: '1.125rem', fontWeight: 700, color: '#ffffff', marginBottom: '0.5rem' }}>
-          Surplus Servings Distribution Breakdown
-        </h3>
-        <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginBottom: '1.25rem' }}>
-          Accountability metrics tracking total intake through delivery completion
-        </p>
-
-        {/* Stacked Progress Bar */}
-        <div style={{
-          height: '14px',
-          borderRadius: '7px',
-          background: 'rgba(255, 255, 255, 0.05)',
-          overflow: 'hidden',
-          display: 'flex',
-          marginBottom: '1.25rem',
-        }}>
-          <div style={{ width: `${deliveredPercent}%`, background: 'var(--emerald)' }} title={`Delivered: ${deliveredPercent}%`} />
-          <div style={{ width: `${inTransitPercent}%`, background: 'var(--indigo)' }} title={`In Transit: ${inTransitPercent}%`} />
-          <div style={{ width: `${availablePercent}%`, background: 'var(--cyan)' }} title={`Available: ${availablePercent}%`} />
-          <div style={{ width: `${wastedPercent}%`, background: 'var(--rose)' }} title={`Expired / Wasted: ${wastedPercent}%`} />
-        </div>
-
-        {/* Legend */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
-            <span style={{ width: '12px', height: '12px', borderRadius: '3px', background: 'var(--emerald)' }} />
-            <div>
-              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Delivered</p>
-              <p style={{ fontSize: '1rem', fontWeight: 700, color: '#ffffff' }}>
-                {report.servingsDelivered} ({deliveredPercent}%)
-              </p>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
-            <span style={{ width: '12px', height: '12px', borderRadius: '3px', background: 'var(--indigo)' }} />
-            <div>
-              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>In Transit</p>
-              <p style={{ fontSize: '1rem', fontWeight: 700, color: '#ffffff' }}>
-                {report.servingsInTransit} ({inTransitPercent}%)
-              </p>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
-            <span style={{ width: '12px', height: '12px', borderRadius: '3px', background: 'var(--cyan)' }} />
-            <div>
-              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Still Available</p>
-              <p style={{ fontSize: '1rem', fontWeight: 700, color: '#ffffff' }}>
-                {report.servingsAvailable} ({availablePercent}%)
-              </p>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
-            <span style={{ width: '12px', height: '12px', borderRadius: '3px', background: 'var(--rose)' }} />
-            <div>
-              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Expired / Wasted</p>
-              <p style={{ fontSize: '1rem', fontWeight: 700, color: '#ffffff' }}>
-                {report.servingsWasted} ({wastedPercent}%)
-              </p>
-            </div>
-          </div>
-        </div>
+      <div className="mt-6 grid gap-6 lg:grid-cols-3">
+        <Leaderboard title="Top kitchens" role="DONOR" rows={i?.topDonors} />
+        <Leaderboard title="Top volunteers" role="VOLUNTEER" rows={i?.topVolunteers} showKm />
+        <Leaderboard title="Recipients served" role="RECIPIENT" rows={i?.topRecipients} />
       </div>
 
-      {/* Leaderboards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '1.5rem' }}>
-        
-        {/* Top Donors */}
-        <div className="glass-panel" style={{ padding: '1.5rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem' }}>
-            <Award size={18} color="var(--emerald)" />
-            <h3 style={{ fontSize: '1.125rem', fontWeight: 700, color: '#ffffff' }}>
-              Top Campus Donors (Servings Delivered)
-            </h3>
+      {i && i.strategies.length > 0 && (
+        <Card className="mt-6">
+          <CardHeader title="Dispatches by matching strategy" subtitle="How the live engine has been configured over time" />
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {i.strategies.map((s) => (
+              <div key={s.strategy} className="rounded-2xl border hairline bg-white/[0.02] p-4">
+                <p className="text-xs uppercase tracking-[0.14em] text-ink-500">{strategyLabel[s.strategy] ?? s.strategy}</p>
+                <p className="mt-1 font-display text-2xl font-semibold">{num(s.dispatches)}</p>
+                <p className="text-xs text-ink-400">{num(s.servings)} servings · avg {num1(s.averageDistanceKm)} km</p>
+              </div>
+            ))}
           </div>
-
-          {report.topDonors.length === 0 ? (
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', padding: '1rem', textAlign: 'center' }}>
-              No deliveries recorded yet.
-            </p>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              {report.topDonors.map((d, idx) => (
-                <div
-                  key={d.id}
-                  style={{
-                    background: 'rgba(15, 23, 42, 0.6)',
-                    border: '1px solid var(--border-subtle)',
-                    borderRadius: 'var(--radius-md)',
-                    padding: '0.75rem 1rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <span style={{
-                      width: '26px',
-                      height: '26px',
-                      borderRadius: '50%',
-                      background: idx === 0 ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255, 255, 255, 0.08)',
-                      color: idx === 0 ? '#fbbf24' : '#ffffff',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontWeight: 800,
-                      fontSize: '0.75rem',
-                    }}>
-                      #{idx + 1}
-                    </span>
-                    <div>
-                      <p style={{ fontWeight: 600, color: '#ffffff', fontSize: '0.875rem' }}>{d.name}</p>
-                      <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{d.id}</p>
-                    </div>
-                  </div>
-
-                  <span style={{ fontWeight: 800, color: 'var(--emerald)', fontSize: '1rem' }}>
-                    {d.servings} <span style={{ fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-muted)' }}>servings</span>
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Top Recipients */}
-        <div className="glass-panel" style={{ padding: '1.5rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem' }}>
-            <Award size={18} color="var(--indigo)" />
-            <h3 style={{ fontSize: '1.125rem', fontWeight: 700, color: '#ffffff' }}>
-              Top Recipient Beneficiaries
-            </h3>
-          </div>
-
-          {report.topRecipients.length === 0 ? (
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', padding: '1rem', textAlign: 'center' }}>
-              No deliveries recorded yet.
-            </p>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              {report.topRecipients.map((r, idx) => (
-                <div
-                  key={r.id}
-                  style={{
-                    background: 'rgba(15, 23, 42, 0.6)',
-                    border: '1px solid var(--border-subtle)',
-                    borderRadius: 'var(--radius-md)',
-                    padding: '0.75rem 1rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <span style={{
-                      width: '26px',
-                      height: '26px',
-                      borderRadius: '50%',
-                      background: idx === 0 ? 'rgba(99, 102, 241, 0.2)' : 'rgba(255, 255, 255, 0.08)',
-                      color: idx === 0 ? '#818cf8' : '#ffffff',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontWeight: 800,
-                      fontSize: '0.75rem',
-                    }}>
-                      #{idx + 1}
-                    </span>
-                    <div>
-                      <p style={{ fontWeight: 600, color: '#ffffff', fontSize: '0.875rem' }}>{r.name}</p>
-                      <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{r.id}</p>
-                    </div>
-                  </div>
-
-                  <span style={{ fontWeight: 800, color: 'var(--indigo)', fontSize: '1rem' }}>
-                    {r.servings} <span style={{ fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-muted)' }}>servings</span>
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-      </div>
-    </div>
+        </Card>
+      )}
+    </>
   );
-};
+}
+
+function Leaderboard({ title, role, rows, showKm }: { title: string; role: Role; rows?: RankEntry[]; showKm?: boolean }) {
+  const max = Math.max(1, ...(rows ?? []).map((r) => r.servings));
+  const medal = ['#fcd581', '#cbd5e1', '#d6a77a'];
+  return (
+    <Card spotlight={`${roleColor[role]}26`}>
+      <CardHeader title={title} icon={<Medal className="size-4" />} />
+      {!rows ? <Skeleton className="h-40" /> : rows.length === 0 ? <p className="text-sm text-ink-400">No deliveries yet.</p> : (
+        <ol className="space-y-3">
+          {rows.map((r, idx) => (
+            <li key={r.id}>
+              <div className="flex items-center justify-between gap-2 text-sm">
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="grid size-6 shrink-0 place-items-center rounded-full text-[11px] font-bold" style={{ color: medal[idx] ?? '#8a93a6', background: `${medal[idx] ?? '#8a93a6'}1f` }}>{idx + 1}</span>
+                  <span className="truncate text-ink-200">{r.name}</span>
+                </span>
+                <span className="shrink-0 text-xs text-ink-400 tabular">
+                  {num(r.servings)} meals{showKm && r.distanceKm != null ? ` · ${num1(r.distanceKm)} km` : ''}
+                </span>
+              </div>
+              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/6">
+                <div className="h-full rounded-full" style={{ width: `${(r.servings / max) * 100}%`, background: roleColor[role] }} />
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
+    </Card>
+  );
+}

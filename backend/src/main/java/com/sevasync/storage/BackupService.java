@@ -1,112 +1,120 @@
 package com.sevasync.storage;
 
-import com.sevasync.exception.SevaSyncException;
+import com.sevasync.database.DatabaseManager;
+import com.sevasync.exception.StorageException;
 import com.sevasync.model.Dispatch;
-import com.sevasync.model.Donor;
 import com.sevasync.model.FoodBatch;
-import com.sevasync.model.Recipient;
+import com.sevasync.model.User;
+import com.sevasync.util.CsvUtil;
 import com.sevasync.util.TimeUtil;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
 import java.io.IOException;
-import java.io.InvalidClassException;
-import java.io.ObjectInputFilter;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.io.Serializable;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
-import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Stream;
 
-/** Binary snapshots using Java Object Streams / Serialization. Restore only accepts SevaSync classes. */
+/**
+ * Backups and exports.
+ * <ul>
+ *   <li>{@link #snapshot()} - a consistent copy of the live database ({@code VACUUM INTO}), safe while running.</li>
+ *   <li>{@link #exportCsv()} - users, batches, dispatches and the audit trail as spreadsheet-friendly CSV files.</li>
+ * </ul>
+ */
 public class BackupService {
+    private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
+    private static final int KEEP_SNAPSHOTS = 10;
 
-    public record Snapshot(LocalDateTime takenAt, ArrayList<Donor> donors, ArrayList<Recipient> recipients,
-                           ArrayList<FoodBatch> batches, ArrayList<Dispatch> dispatches) implements Serializable {
-        public String summary() {
-            return donors.size() + " donors, " + recipients.size() + " recipients, "
-                    + batches.size() + " batches, " + dispatches.size() + " dispatches (taken " + takenAt + ")";
-        }
-    }
-
-    private static final String ALLOWED = "com.sevasync.**;java.util.ArrayList;java.time.*;java.lang.Enum;"
-            + "java.lang.Record;java.lang.Object;java.lang.String;java.lang.Number;java.lang.Integer;"
-            + "java.lang.Boolean;!*";
-
-    private final Repository<Donor> donors;
-    private final Repository<Recipient> recipients;
-    private final Repository<FoodBatch> batches;
-    private final Repository<Dispatch> dispatches;
+    private final DatabaseManager db;
+    private final FileStorageManager files;
+    private final SqliteUserRepository users;
+    private final SqliteFoodBatchRepository batches;
+    private final SqliteDispatchRepository dispatches;
     private final AuditLogger audit;
     private final Clock clock;
-    private final ReentrantLock lock;
 
-    public BackupService(Repository<Donor> donors, Repository<Recipient> recipients,
-                         Repository<FoodBatch> batches, Repository<Dispatch> dispatches,
-                         AuditLogger audit, Clock clock, ReentrantLock lock) {
-        this.donors = donors;
-        this.recipients = recipients;
+    public BackupService(DatabaseManager db, FileStorageManager files, SqliteUserRepository users,
+                         SqliteFoodBatchRepository batches, SqliteDispatchRepository dispatches, AuditLogger audit,
+                         Clock clock) {
+        this.db = db;
+        this.files = files;
+        this.users = users;
         this.batches = batches;
         this.dispatches = dispatches;
         this.audit = audit;
         this.clock = clock;
-        this.lock = lock;
     }
 
-    public Snapshot backup(Path target) throws SevaSyncException {
-        lock.lock();
+    /** Writes {@code backups/sevasync-<timestamp>.db} and prunes old snapshots. */
+    public Path snapshot() {
+        Path dir = files.resolve("backups");
         try {
-            Snapshot snap = new Snapshot(TimeUtil.now(clock), new ArrayList<>(donors.findAll()),
-                    new ArrayList<>(recipients.findAll()), new ArrayList<>(batches.findAll()),
-                    new ArrayList<>(dispatches.findAll()));
-            Path abs = target.toAbsolutePath();
-            if (abs.getParent() != null) {
-                Files.createDirectories(abs.getParent());
-            }
-            try (ObjectOutputStream out = new ObjectOutputStream(new BufferedOutputStream(Files.newOutputStream(abs)))) {
-                out.writeObject(snap);
-            }
-            audit.log("BACKUP_CREATED", "System", abs.getFileName().toString(), snap.summary());
-            return snap;
+            Files.createDirectories(dir);
         } catch (IOException e) {
-            throw new SevaSyncException("Backup failed: " + e.getMessage(), e);
-        } finally {
-            lock.unlock();
+            throw new StorageException("Cannot create backup directory", e);
         }
+        Path target = dir.resolve("sevasync-" + TimeUtil.now(clock).format(STAMP) + ".db");
+        db.snapshotTo(target);
+        prune(dir);
+        return target;
     }
 
-    /** Read a snapshot without applying it. */
-    public Snapshot inspect(Path source) throws SevaSyncException {
-        try (ObjectInputStream in = new ObjectInputStream(new BufferedInputStream(Files.newInputStream(source)))) {
-            in.setObjectInputFilter(ObjectInputFilter.Config.createFilter(ALLOWED));
-            Object o = in.readObject();
-            if (o instanceof Snapshot s) {
-                return s;
+    public List<Map<String, Object>> listSnapshots() {
+        Path dir = files.resolve("backups");
+        List<Map<String, Object>> out = new ArrayList<>();
+        if (!Files.isDirectory(dir)) {
+            return out;
+        }
+        try (Stream<Path> s = Files.list(dir)) {
+            for (Path p : s.filter(f -> f.getFileName().toString().endsWith(".db"))
+                    .sorted(Comparator.reverseOrder()).toList()) {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("file", p.getFileName().toString());
+                m.put("sizeBytes", Files.size(p));
+                out.add(m);
             }
-            throw new SevaSyncException("Not a SevaSync backup file");
-        } catch (InvalidClassException e) {
-            throw new SevaSyncException("Not a valid SevaSync backup: " + e.getMessage(), e);
-        } catch (IOException | ClassNotFoundException e) {
-            throw new SevaSyncException("Cannot read backup: " + e.getMessage(), e);
+        } catch (IOException e) {
+            throw new StorageException("Cannot list backups", e);
         }
+        return out;
     }
 
-    public Snapshot restore(Path source) throws SevaSyncException {
-        Snapshot snap = inspect(source);
-        lock.lock();
+    /** Writes one CSV per table into {@code exports/<timestamp>/} and returns that folder. */
+    public Path exportCsv() {
+        Path dir = files.resolve("exports").resolve(TimeUtil.now(clock).format(STAMP));
         try {
-            donors.replaceAll(snap.donors());
-            recipients.replaceAll(snap.recipients());
-            batches.replaceAll(snap.batches());
-            dispatches.replaceAll(snap.dispatches());
-            audit.log("BACKUP_RESTORED", "System", source.getFileName().toString(), snap.summary());
-            return snap;
-        } finally {
-            lock.unlock();
+            Files.createDirectories(dir);
+        } catch (IOException e) {
+            throw new StorageException("Cannot create export directory", e);
+        }
+        new CsvRepository<User>(files, dir.resolve("users.csv")).writeAll(users.findAll());
+        new CsvRepository<FoodBatch>(files, dir.resolve("food_batches.csv")).writeAll(batches.findAll());
+        new CsvRepository<Dispatch>(files, dir.resolve("dispatches.csv")).writeAll(dispatches.findAll());
+        List<String> lines = new ArrayList<>();
+        lines.add("seq,timestamp,actor,action,entity_type,entity_id,details,hash");
+        for (AuditLogger.AuditEntry e : audit.readAll()) {
+            lines.add(CsvUtil.join(new String[]{String.valueOf(e.seq()), e.timestamp().toString(), e.actorId(),
+                    e.action(), e.entityType(), e.entityId(), e.details(), e.hash()}));
+        }
+        files.writeLinesAtomically(dir.resolve("audit_log.csv"), lines);
+        return dir;
+    }
+
+    private static void prune(Path dir) {
+        try (Stream<Path> s = Files.list(dir)) {
+            List<Path> snaps = s.filter(f -> f.getFileName().toString().endsWith(".db"))
+                    .sorted(Comparator.reverseOrder()).toList();
+            for (int i = KEEP_SNAPSHOTS; i < snaps.size(); i++) {
+                Files.deleteIfExists(snaps.get(i));
+            }
+        } catch (IOException ignored) {
+            // pruning is best effort
         }
     }
 }
