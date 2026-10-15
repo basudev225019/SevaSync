@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { AnimatePresence, motion } from 'motion/react';
 import { clsx } from 'clsx';
@@ -21,6 +21,18 @@ export function AppShell() {
   const [mobileNav, setMobileNav] = useState(false);
   const [feedOpen, setFeedOpen] = useState(false);
 
+  // Escape closes the mobile drawer and the activity panel
+  useEffect(() => {
+    if (!mobileNav && !feedOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      setMobileNav(false);
+      setFeedOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [mobileNav, feedOpen]);
+
   if (!user) return null;
   const items = NAV[user.role].filter((n) => !n.activeOnly || user.status === 'ACTIVE');
   const fullBleed = location.pathname === '/app/network';
@@ -36,7 +48,7 @@ export function AppShell() {
           className={({ isActive }) =>
             clsx(
               'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition',
-              isActive ? 'text-ink-100' : 'text-ink-400 hover:bg-white/[0.04] hover:text-ink-200',
+              isActive ? 'text-ink-100' : 'text-ink-400 hover:bg-wash/[0.04] hover:text-ink-200',
             )
           }
         >
@@ -45,7 +57,7 @@ export function AppShell() {
               {isActive && (
                 <motion.span
                   layoutId="nav-active"
-                  className="absolute inset-0 rounded-xl bg-white/[0.07] ring-1 ring-white/10"
+                  className="absolute inset-0 rounded-xl bg-wash/[0.07] ring-1 ring-wash/10"
                   transition={{ type: 'spring', stiffness: 500, damping: 40 }}
                 />
               )}
@@ -81,7 +93,7 @@ export function AppShell() {
       <AnimatePresence>
         {mobileNav && (
           <motion.div className="fixed inset-0 z-50 lg:hidden" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <div className="absolute inset-0 bg-night-950/70 backdrop-blur-sm" onClick={() => setMobileNav(false)} />
+            <div className="absolute inset-0 bg-ink-100/25 backdrop-blur-sm" onClick={() => setMobileNav(false)} />
             <motion.aside
               className="glass-strong absolute inset-y-0 left-0 flex w-72 flex-col px-4 py-5"
               initial={{ x: -300 }}
@@ -91,11 +103,11 @@ export function AppShell() {
             >
               <div className="flex items-center justify-between px-2">
                 <Logo />
-                <button onClick={() => setMobileNav(false)} className="grid size-9 place-items-center rounded-xl text-ink-400 hover:bg-white/5" aria-label="Close menu">
+                <button onClick={() => setMobileNav(false)} className="grid size-9 place-items-center rounded-xl text-ink-400 hover:bg-wash/5" aria-label="Close menu">
                   <X className="size-4" />
                 </button>
               </div>
-              <div className="mt-8 flex-1">{nav}</div>
+              <div className="mt-8 min-h-0 flex-1 overflow-y-auto">{nav}</div>
               <UserCard onSignOut={signOut} />
             </motion.aside>
           </motion.div>
@@ -105,7 +117,7 @@ export function AppShell() {
       <div className="relative lg:pl-64">
         {/* top bar */}
         <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b hairline bg-night-900/70 px-4 backdrop-blur-xl sm:px-6">
-          <button onClick={() => setMobileNav(true)} className="grid size-9 place-items-center rounded-xl text-ink-300 hover:bg-white/5 lg:hidden" aria-label="Open menu">
+          <button onClick={() => setMobileNav(true)} className="grid size-9 place-items-center rounded-xl text-ink-300 hover:bg-wash/5 lg:hidden" aria-label="Open menu">
             <Menu className="size-5" />
           </button>
           <div className="lg:hidden"><Logo compact /></div>
@@ -116,12 +128,12 @@ export function AppShell() {
               setFeedOpen((o) => !o);
               markRead();
             }}
-            className="relative grid size-10 place-items-center rounded-xl text-ink-300 transition hover:bg-white/5 hover:text-ink-100"
+            className="relative grid size-10 place-items-center rounded-xl text-ink-300 transition hover:bg-wash/5 hover:text-ink-100"
             aria-label="Live activity"
           >
             <Bell className="size-[18px]" />
             {unread > 0 && (
-              <span className="absolute right-1.5 top-1.5 grid min-w-4 place-items-center rounded-full bg-saffron-400 px-1 text-[10px] font-bold text-night-950">
+              <span className="absolute right-1.5 top-1.5 grid min-w-4 place-items-center rounded-full bg-saffron-500 px-1 text-[10px] font-bold text-white">
                 {unread > 9 ? '9+' : unread}
               </span>
             )}
@@ -174,13 +186,13 @@ function UserCard({ onSignOut }: { onSignOut: () => void }) {
   const { user } = useAuth();
   if (!user) return null;
   return (
-    <div className="mt-4 flex items-center gap-3 rounded-2xl border hairline bg-white/[0.02] p-3">
+    <div className="mt-4 flex items-center gap-3 rounded-2xl border hairline bg-wash/[0.02] p-3">
       <Avatar name={user.name} role={user.role} />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold text-ink-100">{user.name}</p>
         <p className="text-xs" style={{ color: roleColor[user.role] }}>{roleLabel[user.role]}</p>
       </div>
-      <button onClick={onSignOut} className="grid size-9 place-items-center rounded-xl text-ink-400 transition hover:bg-white/5 hover:text-rose-300" aria-label="Sign out" title="Sign out">
+      <button onClick={onSignOut} className="grid size-9 place-items-center rounded-xl text-ink-400 transition hover:bg-wash/5 hover:text-rose-600" aria-label="Sign out" title="Sign out">
         <LogOut className="size-4" />
       </button>
     </div>
@@ -190,7 +202,7 @@ function UserCard({ onSignOut }: { onSignOut: () => void }) {
 function ConnectionBadge({ state }: { state: string }) {
   const live = state === 'live';
   return (
-    <span className={clsx('hidden items-center gap-2 rounded-full px-3 py-1 text-xs font-medium sm:inline-flex', live ? 'bg-leaf-500/10 text-leaf-300' : 'bg-white/5 text-ink-400')}>
+    <span className={clsx('hidden items-center gap-2 rounded-full px-3 py-1 text-xs font-medium sm:inline-flex', live ? 'bg-leaf-500/10 text-leaf-700' : 'bg-wash/5 text-ink-400')}>
       <span className="relative inline-flex size-2">
         {live && <span className="absolute inset-0 animate-ping rounded-full bg-leaf-400 opacity-60" />}
         <span className={clsx('relative inline-flex size-2 rounded-full', live ? 'bg-leaf-400' : 'bg-ink-500')} />

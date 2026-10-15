@@ -10,10 +10,10 @@ interface BadgeProps {
 }
 
 /** Small tinted pill. The colour drives text, border and background so any status colour works. */
-export function Badge({ color = '#94a3b8', children, dot, pulse, className }: BadgeProps) {
+export function Badge({ color = '#a08c7a', children, dot, pulse, className }: BadgeProps) {
   return (
     <span
-      className={clsx('inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide', className)}
+      className={clsx('inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide', className)}
       style={{
         color,
         background: `color-mix(in oklab, ${color} 14%, transparent)`,

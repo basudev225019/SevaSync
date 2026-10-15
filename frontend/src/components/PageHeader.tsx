@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import SplitText from './reactbits/SplitText';
 
 /** Page title with a ReactBits SplitText entrance, optional eyebrow, description and actions. */
-export function PageHeader({ eyebrow, title, description, actions, accent = '#fcd581' }: {
+export function PageHeader({ eyebrow, title, description, actions, accent = '#f2a950' }: {
   eyebrow?: string;
   title: string;
   description?: ReactNode;

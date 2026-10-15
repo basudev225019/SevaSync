@@ -46,7 +46,7 @@ export default function DispatchesView() {
         ]}
       />
       {list.isError ? <ErrorState error={list.error} onRetry={() => list.refetch()} /> : list.isLoading ? (
-        <div className="grid gap-4 lg:grid-cols-2">{[0, 1].map((i) => <Skeleton key={i} className="h-56" />)}</div>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">{[0, 1].map((i) => <Skeleton key={i} className="h-56" />)}</div>
       ) : items.length === 0 ? (
         <EmptyState icon={<Truck className="size-5" />} title="Nothing to show">No dispatches match this filter yet.</EmptyState>
       ) : (

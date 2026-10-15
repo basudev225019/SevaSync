@@ -49,7 +49,7 @@ export function Modal({ open, onClose, title, subtitle, children, footer, width 
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
-          <motion.div className="absolute inset-0 bg-night-950/70 backdrop-blur-sm" onClick={onClose} />
+          <motion.div className="absolute inset-0 bg-ink-100/25 backdrop-blur-sm" onClick={onClose} />
           <motion.div
             ref={panel}
             role="dialog"
@@ -70,7 +70,7 @@ export function Modal({ open, onClose, title, subtitle, children, footer, width 
               <button
                 data-close
                 onClick={onClose}
-                className="grid size-9 place-items-center rounded-xl text-ink-400 transition hover:bg-white/5 hover:text-ink-100"
+                className="grid size-9 place-items-center rounded-xl text-ink-400 transition hover:bg-wash/5 hover:text-ink-100"
                 aria-label="Close"
               >
                 <X className="size-4" />

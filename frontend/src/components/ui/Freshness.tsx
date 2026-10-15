@@ -20,7 +20,7 @@ export function Freshness({ expiresAt, shelfLifeMinutes, compact, className }: {
         <span className="tabular font-semibold" style={{ color }}>{minutesLeft(left)}</span>
         {!compact && <span className="text-ink-500">left to eat safely</span>}
       </div>
-      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/6">
+      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-wash/6">
         <div
           className="h-full rounded-full transition-[width] duration-700"
           style={{ width: `${ratio * 100}%`, background: `linear-gradient(90deg, ${color}aa, ${color})`, boxShadow: `0 0 12px ${color}88` }}

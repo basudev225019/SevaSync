@@ -92,7 +92,7 @@ export function BatchForm({ onDone, compact }: { onDone?: (b: Batch) => void; co
                 setShelf(Math.round(MAX_SHELF[c] * 0.75));
               }}
               aria-pressed={c === category}
-              className={clsx('rounded-2xl border px-2 py-3 text-center transition', c === category ? 'border-saffron-400/50 bg-saffron-400/10' : 'border-white/8 hover:bg-white/[0.03]')}
+              className={clsx('rounded-2xl border px-2 py-3 text-center transition', c === category ? 'border-saffron-400/50 bg-saffron-400/10' : 'border-wash/8 hover:bg-wash/[0.03]')}
             >
               <span className="block text-xl">{categoryEmoji[c]}</span>
               <span className="mt-1 block text-[11px] font-semibold text-ink-200">{categoryLabel[c]}</span>
@@ -111,11 +111,11 @@ export function BatchForm({ onDone, compact }: { onDone?: (b: Batch) => void; co
           <button
             type="button"
             onClick={() => setVegetarian((v) => !v)}
-            className={clsx('flex w-full items-center justify-between rounded-xl border px-3.5 py-2.5 text-sm transition', vegetarian ? 'border-leaf-400/40 bg-leaf-500/10 text-leaf-300' : 'border-white/8 text-ink-300')}
+            className={clsx('flex w-full items-center justify-between rounded-xl border px-3.5 py-2.5 text-sm transition', vegetarian ? 'border-leaf-400/40 bg-leaf-500/10 text-leaf-700' : 'border-wash/8 text-ink-300')}
             aria-pressed={vegetarian}
           >
             <span className="flex items-center gap-2"><Leaf className="size-4" /> {vegetarian ? 'Vegetarian' : 'Non-vegetarian'}</span>
-            <span className={clsx('relative h-5 w-9 rounded-full transition', vegetarian ? 'bg-leaf-500/60' : 'bg-white/10')}>
+            <span className={clsx('relative h-5 w-9 rounded-full transition', vegetarian ? 'bg-leaf-500/60' : 'bg-wash/10')}>
               <motion.span layout className="absolute top-0.5 size-4 rounded-full bg-white" style={{ left: vegetarian ? 18 : 2 }} />
             </span>
           </button>
@@ -126,13 +126,13 @@ export function BatchForm({ onDone, compact }: { onDone?: (b: Batch) => void; co
 
       <motion.div
         layout
-        className={clsx('flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm', verdict.ok ? 'border-leaf-400/25 bg-leaf-500/[0.07] text-leaf-200' : 'border-rose-400/25 bg-rose-500/[0.07] text-rose-200')}
+        className={clsx('flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm', verdict.ok ? 'border-leaf-400/25 bg-leaf-500/[0.07] text-leaf-700' : 'border-rose-400/25 bg-rose-500/[0.07] text-rose-700')}
       >
         {verdict.ok ? <ShieldCheck className="mt-0.5 size-4 shrink-0" /> : <ShieldAlert className="mt-0.5 size-4 shrink-0" />}
         <div className="flex-1">
           {verdict.text}
           {verdict.ok && (
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/8">
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-wash/8">
               <div className="h-full rounded-full" style={{ width: `${ratio * 100}%`, background: freshnessColor(ratio) }} />
             </div>
           )}
@@ -171,8 +171,8 @@ function Slider({ label, value, min, max, step, onChange, suffix, format }: {
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
         aria-label={label}
-        className="h-2 w-full cursor-pointer appearance-none rounded-full bg-white/8 accent-saffron-400"
-        style={{ background: `linear-gradient(90deg, #fbbf24 ${pct}%, rgb(255 255 255 / 0.08) ${pct}%)` }}
+        className="h-2 w-full cursor-pointer appearance-none rounded-full bg-wash/8 accent-saffron-400"
+        style={{ background: `linear-gradient(90deg, #e8862a ${pct}%, rgb(107 63 29 / 0.12) ${pct}%)` }}
       />
     </div>
   );

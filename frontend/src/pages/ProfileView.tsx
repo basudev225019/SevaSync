@@ -59,7 +59,7 @@ export default function ProfileView() {
   return (
     <>
       <PageHeader eyebrow="Profile" accent={roleColor[user.role]} title="Your account" />
-      <div className="grid gap-6 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
         <Card className="lg:col-span-3">
           <div className="mb-6 flex items-center gap-4">
             <Avatar name={user.name} role={user.role} size={56} />
@@ -67,13 +67,13 @@ export default function ProfileView() {
               <p className="text-lg font-semibold">{user.name}</p>
               <div className="mt-1 flex flex-wrap gap-2">
                 <Badge color={roleColor[user.role]}>{roleLabel[user.role]}</Badge>
-                <Badge color={user.status === 'ACTIVE' ? '#34d399' : '#fbbf24'} dot>{user.status.toLowerCase()}</Badge>
+                <Badge color={user.status === 'ACTIVE' ? '#1f9d55' : '#e8862a'} dot>{user.status.toLowerCase()}</Badge>
                 <span className="text-xs text-ink-500">{user.email} · {user.id}</span>
               </div>
             </div>
           </div>
           <form
-            className="grid gap-4 sm:grid-cols-2"
+            className="grid grid-cols-1 gap-4 sm:grid-cols-2"
             onSubmit={(e: FormEvent) => {
               e.preventDefault();
               save.mutate();

@@ -83,20 +83,20 @@ function DonorHome({ user, impact }: { user: User; impact?: PersonalImpact }) {
         description="Log what is left over and SevaSync takes it from there: safety check, matching and a volunteer at your door."
         actions={
           <button onClick={() => setLogging(true)}>
-            <StarBorder as="span" color="#fbbf24" duration={4} backgroundColor="#0e121b" textColor="#f4f6fb" className="inline-block">
+            <StarBorder as="span" theme="light" color="#e8862a" duration={4} backgroundColor="#fffaf2" textColor="#2a1a10" className="inline-block">
               <span className="flex items-center gap-2 font-semibold"><PackagePlus className="size-4" /> Log surplus</span>
             </StarBorder>
           </button>
         }
       />
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="Meals delivered" value={impact?.servingsDelivered} icon={<HandHeart className="size-4" />} accent="#34d399" />
-        <StatCard label="Food rescued" value={impact?.foodSavedKg} decimals={1} suffix="kg" icon={<Weight className="size-4" />} accent="#fbbf24" />
-        <StatCard label="CO₂e avoided" value={impact?.co2AvoidedKg} decimals={1} suffix="kg" icon={<Leaf className="size-4" />} accent="#6ee7b7" />
-        <StatCard label="Avg. rating" value={impact?.averageRating ?? null} decimals={1} suffix="/ 5" icon={<Star className="size-4" />} accent="#fcd581" />
+        <StatCard label="Meals delivered" value={impact?.servingsDelivered} icon={<HandHeart className="size-4" />} accent="#1f9d55" />
+        <StatCard label="Food rescued" value={impact?.foodSavedKg} decimals={1} suffix="kg" icon={<Weight className="size-4" />} accent="#e8862a" />
+        <StatCard label="CO₂e avoided" value={impact?.co2AvoidedKg} decimals={1} suffix="kg" icon={<Leaf className="size-4" />} accent="#3fa66b" />
+        <StatCard label="Avg. rating" value={impact?.averageRating ?? null} decimals={1} suffix="/ 5" icon={<Star className="size-4" />} accent="#f2a950" />
       </div>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-5">
+      <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-5">
         <Card className="xl:col-span-3">
           <CardHeader title="Your food right now" subtitle="Live freshness for everything not yet delivered" icon={<UtensilsCrossed className="size-4" />} action={<Link to="/app/batches"><Button size="sm" variant="ghost" trailing={<ArrowRight className="size-3.5" />}>All</Button></Link>} />
           {batches.isLoading ? <Skeleton className="h-40" /> : open.length === 0 ? (
@@ -106,8 +106,8 @@ function DonorHome({ user, impact }: { user: User; impact?: PersonalImpact }) {
           ) : (
             <ul className="space-y-3">
               {open.map((b) => (
-                <li key={b.id} className="flex items-center gap-4 rounded-2xl border hairline bg-white/[0.02] p-3.5">
-                  <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-white/5 text-lg">{categoryEmoji[b.category]}</span>
+                <li key={b.id} className="flex items-center gap-4 rounded-2xl border hairline bg-wash/[0.02] p-3.5">
+                  <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-wash/5 text-lg">{categoryEmoji[b.category]}</span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
                       <p className="truncate font-semibold text-ink-100">{b.foodName}</p>
@@ -158,10 +158,10 @@ function VolunteerHome({ user, impact }: { user: User; impact?: PersonalImpact }
         actions={<Link to="/app/pickups"><Button icon={<Bike className="size-4" />}>Find pickups</Button></Link>}
       />
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="Deliveries" value={impact?.deliveries} icon={<CheckCircle2 className="size-4" />} accent="#34d399" />
-        <StatCard label="Meals carried" value={impact?.servingsDelivered} icon={<HandHeart className="size-4" />} accent="#38bdf8" />
-        <StatCard label="Distance" value={impact?.distanceKm} decimals={1} suffix="km" icon={<RouteIcon className="size-4" />} accent="#a78bfa" />
-        <StatCard label="CO₂e avoided" value={impact?.co2AvoidedKg} decimals={1} suffix="kg" icon={<Leaf className="size-4" />} accent="#6ee7b7" />
+        <StatCard label="Deliveries" value={impact?.deliveries} icon={<CheckCircle2 className="size-4" />} accent="#1f9d55" />
+        <StatCard label="Meals carried" value={impact?.servingsDelivered} icon={<HandHeart className="size-4" />} accent="#0f8fd6" />
+        <StatCard label="Distance" value={impact?.distanceKm} decimals={1} suffix="km" icon={<RouteIcon className="size-4" />} accent="#8b5cf6" />
+        <StatCard label="CO₂e avoided" value={impact?.co2AvoidedKg} decimals={1} suffix="kg" icon={<Leaf className="size-4" />} accent="#3fa66b" />
       </div>
 
       <section className="mt-8">
@@ -178,7 +178,7 @@ function VolunteerHome({ user, impact }: { user: User; impact?: PersonalImpact }
       <section className="mt-10">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">Nearest open pickups</h2>
-          <Link to="/app/pickups" className="text-sm text-sky-300 hover:underline">See all</Link>
+          <Link to="/app/pickups" className="text-sm text-sky-700 hover:underline">See all</Link>
         </div>
         {open.isError ? <ErrorState error={open.error} onRetry={() => open.refetch()} /> : nearest.length === 0 ? (
           <p className="text-sm text-ink-400">No food is waiting for a volunteer. Great news, or a quiet evening.</p>
@@ -206,15 +206,15 @@ function RecipientHome({ user, impact }: { user: User; impact?: PersonalImpact }
         description="Food matched to you appears here the moment it is assigned, and you can watch it travel."
       />
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="Meals received" value={impact?.servingsReceived} icon={<HandHeart className="size-4" />} accent="#fb7185" />
-        <StatCard label="On the way" value={impact?.servingsIncoming} suffix="servings" icon={<Truck className="size-4" />} accent="#fbbf24" />
-        <StatCard label="Food received" value={impact?.foodReceivedKg} decimals={1} suffix="kg" icon={<Weight className="size-4" />} accent="#34d399" />
-        <StatCard label="Daily capacity" value={user.dailyCapacity} suffix="meals" icon={<Gauge className="size-4" />} accent="#a78bfa" />
+        <StatCard label="Meals received" value={impact?.servingsReceived} icon={<HandHeart className="size-4" />} accent="#e34b6a" />
+        <StatCard label="On the way" value={impact?.servingsIncoming} suffix="servings" icon={<Truck className="size-4" />} accent="#e8862a" />
+        <StatCard label="Food received" value={impact?.foodReceivedKg} decimals={1} suffix="kg" icon={<Weight className="size-4" />} accent="#1f9d55" />
+        <StatCard label="Daily capacity" value={user.dailyCapacity} suffix="meals" icon={<Gauge className="size-4" />} accent="#8b5cf6" />
       </div>
 
       {toConfirm.length > 0 && (
         <section className="mt-8">
-          <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold"><Star className="size-4 text-saffron-300" /> Please confirm these deliveries</h2>
+          <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold"><Star className="size-4 text-saffron-600" /> Please confirm these deliveries</h2>
           <DispatchList items={toConfirm} />
         </section>
       )}
@@ -265,13 +265,13 @@ function AdminHome({ user }: { user: User }) {
         }
       />
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="Meals served" value={i?.servingsDelivered} icon={<HandHeart className="size-4" />} accent="#34d399" hint={i && `${num1(i.deliveryRatePercent)}% of settled food delivered`} />
-        <StatCard label="Food rescued" value={i?.foodSavedKg} decimals={1} suffix="kg" icon={<Weight className="size-4" />} accent="#fbbf24" hint={i && `${num1(i.co2AvoidedKg)} kg CO₂e avoided`} />
-        <StatCard label="In transit" value={i?.servingsInTransit} suffix="servings" icon={<Truck className="size-4" />} accent="#38bdf8" hint={i && `${num(i.servingsAvailable)} waiting for a match`} />
-        <StatCard label="Verifications" value={i?.pendingVerifications} icon={<UserCheck className="size-4" />} accent="#a78bfa" hint={<Link to="/app/partners" className="hover:underline">Review partners →</Link>} />
+        <StatCard label="Meals served" value={i?.servingsDelivered} icon={<HandHeart className="size-4" />} accent="#1f9d55" hint={i && `${num1(i.deliveryRatePercent)}% of settled food delivered`} />
+        <StatCard label="Food rescued" value={i?.foodSavedKg} decimals={1} suffix="kg" icon={<Weight className="size-4" />} accent="#e8862a" hint={i && `${num1(i.co2AvoidedKg)} kg CO₂e avoided`} />
+        <StatCard label="In transit" value={i?.servingsInTransit} suffix="servings" icon={<Truck className="size-4" />} accent="#0f8fd6" hint={i && `${num(i.servingsAvailable)} waiting for a match`} />
+        <StatCard label="Verifications" value={i?.pendingVerifications} icon={<UserCheck className="size-4" />} accent="#8b5cf6" hint={<Link to="/app/partners" className="hover:underline">Review partners →</Link>} />
       </div>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-3">
+      <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-3">
         <Card padded={false} className="relative h-[460px] xl:col-span-2">
           {network.data ? (
             <CampusScene network={network.data} className="absolute inset-0" showLabels={false} />
@@ -292,16 +292,16 @@ function AdminHome({ user }: { user: User }) {
         </Card>
       </div>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-3">
+      <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-3">
         <Card className="xl:col-span-2">
           <CardHeader title="Last 14 days" subtitle="Servings donated, delivered and wasted" />
           {i ? <TimelineChart data={i.timeline} /> : <Skeleton className="h-64" />}
         </Card>
-        <Card spotlight={verify.data?.valid === false ? '#f43f5e40' : '#34d39933'}>
+        <Card spotlight={verify.data?.valid === false ? '#dc2f4f40' : '#1f9d5533'}>
           <CardHeader title="Audit chain" subtitle="HMAC-SHA-256, recomputed end to end" icon={<ShieldCheck className="size-4" />} />
           {verify.data ? (
             <div>
-              <p className={verify.data.valid ? 'font-display text-3xl font-semibold text-leaf-300' : 'font-display text-3xl font-semibold text-rose-300'}>
+              <p className={verify.data.valid ? 'font-display text-3xl font-semibold text-leaf-700' : 'font-display text-3xl font-semibold text-rose-700'}>
                 {verify.data.valid ? 'Intact' : 'Tampered'}
               </p>
               <p className="mt-1 text-sm text-ink-400">{num(verify.data.entries)} entries · {verify.data.reason}</p>
@@ -319,7 +319,7 @@ function AdminHome({ user }: { user: User }) {
 function PendingHome({ user }: { user: User }) {
   return (
     <div className="mx-auto max-w-xl py-16 text-center">
-      <div className="mx-auto grid size-16 place-items-center rounded-3xl bg-saffron-400/10 text-saffron-300">
+      <div className="mx-auto grid size-16 place-items-center rounded-3xl bg-saffron-400/10 text-saffron-600">
         <Hourglass className="size-7 animate-float" />
       </div>
       <h1 className="mt-6 text-3xl font-semibold">Almost there, {user.name}</h1>

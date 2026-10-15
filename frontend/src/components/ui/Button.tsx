@@ -15,11 +15,11 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variants: Record<Variant, string> = {
   primary:
-    'bg-gradient-to-b from-saffron-300 to-saffron-500 text-night-950 shadow-[0_8px_30px_-10px_rgba(251,191,36,0.7)] hover:brightness-110',
-  secondary: 'glass text-ink-100 hover:bg-white/8',
-  ghost: 'text-ink-300 hover:text-ink-100 hover:bg-white/5',
-  danger: 'bg-rose-500/15 text-rose-200 border border-rose-400/25 hover:bg-rose-500/25',
-  success: 'bg-leaf-500/15 text-leaf-300 border border-leaf-400/25 hover:bg-leaf-500/25',
+    'bg-gradient-to-b from-saffron-400 to-saffron-500 text-white shadow-[0_10px_28px_-12px_rgba(220,106,20,0.75)] hover:brightness-105',
+  secondary: 'glass text-ink-100 hover:bg-wash/8',
+  ghost: 'text-ink-300 hover:text-ink-100 hover:bg-wash/5',
+  danger: 'bg-rose-500/15 text-rose-700 border border-rose-400/25 hover:bg-rose-500/25',
+  success: 'bg-leaf-500/15 text-leaf-700 border border-leaf-400/25 hover:bg-leaf-500/25',
 };
 
 const sizes: Record<Size, string> = {

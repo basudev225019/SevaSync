@@ -50,20 +50,20 @@ export default function PartnersView() {
         value={tab}
         onChange={setTab}
         options={[
-          { value: 'PENDING', label: `Awaiting verification (${pending.length})`, color: '#fbbf24' },
+          { value: 'PENDING', label: <><span className="sm:hidden">Pending</span><span className="hidden sm:inline">Awaiting verification</span> ({pending.length})</>, color: '#e8862a' },
           { value: 'DONOR', label: 'Kitchens', color: roleColor.DONOR },
           { value: 'RECIPIENT', label: 'Recipients', color: roleColor.RECIPIENT },
           { value: 'VOLUNTEER', label: 'Volunteers', color: roleColor.VOLUNTEER },
         ]}
       />
       {users.isError ? <ErrorState error={users.error} onRetry={() => users.refetch()} /> : users.isLoading ? (
-        <div className="grid gap-4 md:grid-cols-2">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-36" />)}</div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-36" />)}</div>
       ) : items.length === 0 ? (
         <EmptyState icon={<Users className="size-5" />} title={tab === 'PENDING' ? 'Nobody is waiting' : 'No partners yet'}>
           {tab === 'PENDING' ? 'New kitchens and shelters that sign up will appear here for verification.' : 'Use the buttons above to add one.'}
         </EmptyState>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           <AnimatePresence initial={false}>
             {items.map((u) => <PartnerCard key={u.id} u={u} onEdit={() => setEditing(u)} />)}
           </AnimatePresence>
@@ -76,7 +76,7 @@ export default function PartnersView() {
   );
 }
 
-const STATUS_COLOR: Record<AccountStatus, string> = { ACTIVE: '#34d399', PENDING: '#fbbf24', SUSPENDED: '#f43f5e' };
+const STATUS_COLOR: Record<AccountStatus, string> = { ACTIVE: '#1f9d55', PENDING: '#e8862a', SUSPENDED: '#dc2f4f' };
 
 function PartnerCard({ u, onEdit }: { u: User; onEdit: () => void }) {
   const qc = useQueryClient();

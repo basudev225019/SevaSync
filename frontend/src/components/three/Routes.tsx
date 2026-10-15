@@ -1,12 +1,13 @@
 import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Html, QuadraticBezierLine, Trail } from '@react-three/drei';
+import { QuadraticBezierLine, Trail } from '@react-three/drei';
 import * as THREE from 'three';
 import { dispatchStatusLabel } from '../../lib/format';
 import { dispatchColor, roleColor } from '../../lib/theme';
 import type { NetworkRoute } from '../../types';
 import type { Selection } from './Nodes';
 import { arc } from './arc';
+import { useSceneLabel, type LabelStore } from './labelStore';
 
 /** A matched hand-over drawn as an arc: dashed while waiting for a volunteer, solid once someone is on it. */
 export function RouteArc({ route, from, to, selected, faded, onSelect }: {
@@ -19,7 +20,7 @@ export function RouteArc({ route, from, to, selected, faded, onSelect }: {
 }) {
   const ref = useRef<{ material: THREE.Material & { dashOffset?: number } } | null>(null);
   const { start, mid, end } = useMemo(() => arc(from, to), [from, to]);
-  const color = faded ? '#34d399' : dispatchColor[route.status];
+  const color = faded ? '#1f9d55' : dispatchColor[route.status];
   const waiting = route.status === 'ASSIGNED';
 
   useFrame((_, dt) => {
@@ -53,12 +54,14 @@ export function RouteArc({ route, from, to, selected, faded, onSelect }: {
  * kitchen; PICKED_UP rides the arc from kitchen to recipient. Progress follows the real timestamps and eases
  * forward on screen so state changes never look like teleports.
  */
-export function Courier({ route, home, donor, recipient, animate }: {
+export function Courier({ route, home, donor, recipient, animate, labels, showLabel = true }: {
   route: NetworkRoute;
   home: [number, number] | null;
   donor: [number, number];
   recipient: [number, number];
   animate: boolean;
+  labels: LabelStore;
+  showLabel?: boolean;
 }) {
   const mesh = useRef<THREE.Mesh>(null);
   const progress = useRef(0);
@@ -73,6 +76,17 @@ export function Courier({ route, home, donor, recipient, animate }: {
   }, [route.status, home, donor, recipient]);
 
   const color = route.status === 'PICKED_UP' ? roleColor.DONOR : roleColor.VOLUNTEER;
+
+  // the label follows the comet: its anchor reads the mesh position every frame
+  const anchor = useMemo(() => {
+    const v = new THREE.Vector3();
+    return () => (mesh.current ? v.copy(mesh.current.position).setY(mesh.current.position.y + 0.35) : v);
+  }, []);
+  useSceneLabel(labels, `courier-${route.id}`, anchor, showLabel && route.status === 'PICKED_UP' ? (
+    <div className="scene-label" style={{ fontSize: 10, padding: '2px 7px' }}>
+      {route.servings} servings · {dispatchStatusLabel.PICKED_UP.toLowerCase()}
+    </div>
+  ) : null);
 
   useFrame((_, dt) => {
     if (!mesh.current) return;
@@ -96,24 +110,6 @@ export function Courier({ route, home, donor, recipient, animate }: {
           <meshBasicMaterial color={color} toneMapped={false} />
         </mesh>
       </Trail>
-      {route.status === 'PICKED_UP' && <CourierLabel meshRef={mesh} text={`${route.servings} servings · ${dispatchStatusLabel.PICKED_UP.toLowerCase()}`} />}
-    </group>
-  );
-}
-
-function CourierLabel({ meshRef, text }: { meshRef: React.RefObject<THREE.Mesh | null>; text: string }) {
-  const group = useRef<THREE.Group>(null);
-  useFrame(() => {
-    if (group.current && meshRef.current) {
-      group.current.position.copy(meshRef.current.position);
-      group.current.position.y += 0.35;
-    }
-  });
-  return (
-    <group ref={group}>
-      <Html zIndexRange={[5, 0]} style={{ pointerEvents: 'none' }}>
-        <div className="scene-label" style={{ fontSize: 10, padding: '2px 7px' }}>{text}</div>
-      </Html>
     </group>
   );
 }

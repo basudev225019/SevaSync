@@ -60,17 +60,17 @@ export default function MatchingView() {
 
       {settings.isError && <ErrorState error={settings.error} onRetry={() => settings.refetch()} />}
       {!s ? <Skeleton className="h-48" /> : (
-        <div className="grid gap-4 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           {s.strategies.map((st) => {
             const active = st.id === s.activeStrategy;
             const isChosen = st.id === chosen;
             return (
-              <Card key={st.id} spotlight={active ? '#a78bfa40' : undefined} className={clsx('cursor-pointer transition', isChosen && 'ring-1 ring-violet-400/40')} onClick={() => setPreviewStrategy(st.id)}>
+              <Card key={st.id} spotlight={active ? '#8b5cf640' : undefined} className={clsx('cursor-pointer transition', isChosen && 'ring-1 ring-violet-400/40')} onClick={() => setPreviewStrategy(st.id)}>
                 <div className="flex items-start justify-between gap-2">
-                  <span className="grid size-10 place-items-center rounded-xl bg-violet-400/12 text-violet-300">
+                  <span className="grid size-10 place-items-center rounded-xl bg-violet-400/12 text-violet-700">
                     {st.id === 'smart' ? <Sparkles className="size-5" /> : st.id === 'fifo' ? <ArrowRight className="size-5" /> : <Zap className="size-5" />}
                   </span>
-                  {active && <Badge color="#34d399" dot>Live</Badge>}
+                  {active && <Badge color="#1f9d55" dot>Live</Badge>}
                 </div>
                 <h3 className="mt-4 font-semibold">{st.name}</h3>
                 <p className="mt-1.5 text-sm text-ink-400">{st.description}</p>
@@ -95,7 +95,7 @@ export default function MatchingView() {
             <button
               onClick={() => save.mutate({ autoMatch: !s.autoMatch })}
               aria-pressed={s.autoMatch}
-              className={clsx('relative h-8 w-14 shrink-0 rounded-full transition', s.autoMatch ? 'bg-leaf-500/70' : 'bg-white/10')}
+              className={clsx('relative h-8 w-14 shrink-0 rounded-full transition', s.autoMatch ? 'bg-leaf-500/70' : 'bg-wash/10')}
             >
               <motion.span layout className="absolute top-1 size-6 rounded-full bg-white shadow" style={{ left: s.autoMatch ? 28 : 4 }} />
             </button>
@@ -125,12 +125,12 @@ export default function MatchingView() {
         ) : (
           <>
             <div className="mb-4 flex flex-wrap gap-2 text-xs">
-              <Badge color="#34d399">{num(preview.allocatedServings)} servings matched</Badge>
-              <Badge color="#fbbf24">{num(preview.unallocatedServings)} still waiting</Badge>
-              <Badge color="#38bdf8">avg {num1(preview.averageDistanceKm)} km</Badge>
-              <Badge color="#a78bfa">{preview.batchesConsidered} batches · {preview.recipientsAvailable} recipients</Badge>
+              <Badge color="#1f9d55">{num(preview.allocatedServings)} servings matched</Badge>
+              <Badge color="#e8862a">{num(preview.unallocatedServings)} still waiting</Badge>
+              <Badge color="#0f8fd6">avg {num1(preview.averageDistanceKm)} km</Badge>
+              <Badge color="#8b5cf6">{preview.batchesConsidered} batches · {preview.recipientsAvailable} recipients</Badge>
             </div>
-            <ul className="divide-y divide-white/5">
+            <ul className="divide-y divide-wash/5">
               {preview.dispatches.map((d, i) => (
                 <motion.li key={d.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.04 }} className="flex items-center gap-3 py-3 text-sm">
                   <span className="text-lg">{d.batch ? categoryEmoji[d.batch.category] : '🍽️'}</span>
@@ -175,7 +175,7 @@ function Benchmark() {
         icon={<FlaskConical className="size-4" />}
         action={<Button size="sm" icon={<Play className="size-3.5" />} loading={bench.isPending} onClick={() => bench.mutate()}>Run simulation</Button>}
       />
-      <div className="grid gap-5 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
         <Knob label="Simulated days" value={runs} min={5} max={200} step={5} onChange={setRuns} />
         <Knob label="Volunteers on shift" value={volunteers} min={1} max={10} step={1} onChange={setVolunteers} />
         <Knob label="Batches per day" value={batches} min={4} max={40} step={1} onChange={setBatches} />
@@ -186,9 +186,9 @@ function Benchmark() {
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-8">
           {best && (
             <div className="mb-6 rounded-3xl border border-leaf-400/20 bg-leaf-500/[0.06] p-5">
-              <p className="text-xs uppercase tracking-[0.18em] text-leaf-300">Lowest waste over {r.runs} simulated days ({r.elapsedMillis} ms)</p>
+              <p className="text-xs uppercase tracking-[0.18em] text-leaf-700">Lowest waste over {r.runs} simulated days ({r.elapsedMillis} ms)</p>
               <div className="mt-2 font-display text-3xl font-semibold">
-                <GradientText colors={['#34d399', '#fcd581', '#34d399']} animationSpeed={6}>{best.name}</GradientText>
+                <GradientText colors={['#1f9d55', '#f2a950', '#1f9d55']} animationSpeed={6}>{best.name}</GradientText>
               </div>
               <p className="mt-2 text-sm text-ink-300">
                 Wastes {num1(best.wastedPercent)}% of food
@@ -196,7 +196,7 @@ function Benchmark() {
               </p>
             </div>
           )}
-          <div className="grid gap-6 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <Metric title="Food wasted" hint="lower is better" rows={r.results} metric="wastedPercent" unit="%" />
             <Metric title="Average trip" hint="lower is better" rows={r.results} metric="averageDistanceKm" unit=" km" />
             <Metric title="Meals to urgent recipients" hint="higher is better" rows={r.results} metric="urgentSharePercent" unit="%" />
@@ -219,7 +219,7 @@ function Benchmark() {
 function Metric(props: { title: string; hint: string } & Parameters<typeof StrategyMetricChart>[0]) {
   const { title, hint, ...chart } = props;
   return (
-    <div className="rounded-2xl border hairline bg-white/[0.02] p-4">
+    <div className="rounded-2xl border hairline bg-wash/[0.02] p-4">
       <div className="mb-2 flex items-baseline justify-between">
         <h4 className="text-sm font-semibold">{title}</h4>
         <span className="text-[11px] text-ink-500">{hint}</span>
@@ -245,7 +245,7 @@ function Knob({ label, value, min, max, step, onChange }: { label: string; value
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
         className="h-2 w-full cursor-pointer appearance-none rounded-full accent-violet-400"
-        style={{ background: `linear-gradient(90deg, #a78bfa ${pct}%, rgb(255 255 255 / 0.08) ${pct}%)` }}
+        style={{ background: `linear-gradient(90deg, #8b5cf6 ${pct}%, rgb(107 63 29 / 0.12) ${pct}%)` }}
       />
     </label>
   );

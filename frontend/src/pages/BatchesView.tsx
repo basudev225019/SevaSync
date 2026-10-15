@@ -55,11 +55,11 @@ export default function BatchesView() {
         ]}
       />
       {list.isError ? <ErrorState error={list.error} onRetry={() => list.refetch()} /> : list.isLoading ? (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-40" />)}</div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-40" />)}</div>
       ) : items.length === 0 ? (
         <EmptyState icon={<UtensilsCrossed className="size-5" />} title="Nothing here">No batches match this filter.</EmptyState>
       ) : (
-        <motion.div layout className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <motion.div layout className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           <AnimatePresence initial={false}>
             {items.map((b) => <BatchTile key={b.id} b={b} showDonor={admin} onOpen={() => setSelected(b.id)} />)}
           </AnimatePresence>
@@ -81,10 +81,10 @@ function BatchTile({ b, showDonor, onOpen }: { b: Batch; showDonor: boolean; onO
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.97 }}
       onClick={onOpen}
-      className="glass group rounded-3xl p-5 text-left transition hover:bg-white/[0.05]"
+      className="glass group rounded-3xl p-5 text-left transition hover:bg-wash/[0.05]"
     >
       <div className="flex items-start justify-between gap-3">
-        <span className="grid size-11 place-items-center rounded-2xl bg-white/5 text-xl transition group-hover:scale-105">{categoryEmoji[b.category]}</span>
+        <span className="grid size-11 place-items-center rounded-2xl bg-wash/5 text-xl transition group-hover:scale-105">{categoryEmoji[b.category]}</span>
         <BatchPill status={b.status} />
       </div>
       <h3 className="mt-4 truncate text-base font-semibold">{b.foodName}</h3>
@@ -97,7 +97,7 @@ function BatchTile({ b, showDonor, onOpen }: { b: Batch; showDonor: boolean; onO
             <span>{matched} of {b.servings} matched</span>
             <span>{num1(b.kg)} kg</span>
           </div>
-          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/6">
+          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-wash/6">
             <div className="h-full rounded-full bg-sky-400" style={{ width: `${(matched / b.servings) * 100}%` }} />
           </div>
           <Freshness className="mt-3" compact expiresAt={b.expiresAt} shelfLifeMinutes={b.shelfLifeMinutes} />
@@ -137,7 +137,7 @@ function BatchDetail({ id, onClose }: { id: string | null; onClose: () => void }
       {detail.isError && <ErrorState error={detail.error} />}
       {b && (
         <div className="space-y-6">
-          {b.notes && <p className="rounded-2xl bg-white/[0.03] px-4 py-3 text-sm text-ink-300">“{b.notes}”</p>}
+          {b.notes && <p className="rounded-2xl bg-wash/[0.03] px-4 py-3 text-sm text-ink-300">“{b.notes}”</p>}
           <div>
             <h4 className="label">Where it went</h4>
             {b.dispatches && b.dispatches.length > 0 ? <DispatchList items={b.dispatches} columns={1} /> : <p className="text-sm text-ink-400">Not matched yet.</p>}

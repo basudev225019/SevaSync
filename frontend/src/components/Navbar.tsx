@@ -11,17 +11,17 @@ export function Logo({ compact }: { compact?: boolean }) {
   const gid = `logo-${useId().replace(/:/g, '')}`;
   return (
     <Link to="/" className="group inline-flex items-center gap-2.5" aria-label="SevaSync home">
-      <span className="relative grid size-9 place-items-center rounded-xl bg-gradient-to-br from-saffron-400/25 to-leaf-400/15 ring-1 ring-white/10">
+      <span className="relative grid size-9 place-items-center rounded-xl bg-gradient-to-br from-saffron-400/25 to-leaf-400/15 ring-1 ring-wash/10">
         <svg viewBox="0 0 64 64" className="size-6" aria-hidden>
           <defs>
             <linearGradient id={gid} x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0" stopColor="#fbbf24" />
-              <stop offset="1" stopColor="#34d399" />
+              <stop offset="0" stopColor="#e8862a" />
+              <stop offset="1" stopColor="#1f9d55" />
             </linearGradient>
           </defs>
           <path d="M18 38c0-9 6.5-16 14-16s14 7 14 16" fill="none" stroke={`url(#${gid})`} strokeWidth="5" strokeLinecap="round" />
           <path d="M14 42h36" stroke={`url(#${gid})`} strokeWidth="5" strokeLinecap="round" />
-          <circle cx="32" cy="15" r="4" fill="#fbbf24" />
+          <circle cx="32" cy="15" r="4" fill="#e8862a" />
         </svg>
       </span>
       {!compact && (

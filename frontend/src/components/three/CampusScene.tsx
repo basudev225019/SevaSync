@@ -10,6 +10,8 @@ import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { Ground } from './Ground';
 import { DonorTower, RecipientHub, VolunteerMarker, type Selection } from './Nodes';
 import { Courier, RouteArc } from './Routes';
+import { LabelOverlay, LabelProjector } from './labels';
+import { LabelStore } from './labelStore';
 import '../../App.css';
 
 export type { Selection };
@@ -31,6 +33,7 @@ export function CampusScene({ network, mode = 'app', selected = null, onSelect, 
   const reduced = useReducedMotion();
   const animate = !reduced;
   const select = onSelect ?? (() => undefined);
+  const labels = useMemo(() => new LabelStore(), []);
 
   const layout = useMemo(() => {
     const c = network.center;
@@ -62,6 +65,7 @@ export function CampusScene({ network, mode = 'app', selected = null, onSelect, 
 
   return (
     <div className={className} style={{ touchAction: 'none' }}>
+      <div className="relative h-full w-full">
       <Canvas
         dpr={[1, 1.75]}
         camera={{ position: mode === 'hero' ? [0, 24, 34] : [0, 11, 15], fov: 42, near: 0.1, far: 120 }}
@@ -69,11 +73,11 @@ export function CampusScene({ network, mode = 'app', selected = null, onSelect, 
         onPointerMissed={() => select(null)}
         fallback={<div className="grid h-full place-items-center text-sm text-ink-400">3D view needs WebGL, which this browser has turned off.</div>}
       >
-        <color attach="background" args={['#05070c']} />
-        <fog attach="fog" args={['#05070c', 20, 46]} />
-        <ambientLight intensity={0.35} />
-        <directionalLight position={[8, 14, 6]} intensity={0.7} color="#ffe8c2" />
-        <pointLight position={[0, 3, 0]} intensity={6} distance={10} color="#fbbf24" />
+        <color attach="background" args={['#fbf1e2']} />
+        <fog attach="fog" args={['#fbf1e2', 22, 50]} />
+        <hemisphereLight args={["#fff4e2", "#e9c9a0", 1.15]} />
+        <directionalLight position={[8, 14, 6]} intensity={1.6} color="#fff1d6" />
+        <pointLight position={[0, 3, 0]} intensity={2.5} distance={9} color="#f7b267" />
 
         <Suspense fallback={null}>
           <Ground animate={animate} />
@@ -91,6 +95,7 @@ export function CampusScene({ network, mode = 'app', selected = null, onSelect, 
                 showLabel={showLabels}
                 animate={animate}
                 onSelect={select}
+                labels={labels}
               />
             ) : null;
           })}
@@ -107,6 +112,7 @@ export function CampusScene({ network, mode = 'app', selected = null, onSelect, 
                 showLabel={showLabels}
                 animate={animate}
                 onSelect={select}
+                labels={labels}
               />
             ) : null;
           })}
@@ -114,7 +120,7 @@ export function CampusScene({ network, mode = 'app', selected = null, onSelect, 
           {network.volunteers.filter((v) => !busyVolunteers.has(v.id)).map((v) => {
             const p = layout.pos.get(v.id);
             return p ? (
-              <VolunteerMarker key={v.id} volunteer={v} position={p} selected={selected?.id === v.id} animate={animate} onSelect={select} />
+              <VolunteerMarker key={v.id} volunteer={v} position={p} selected={selected?.id === v.id} animate={animate} onSelect={select} labels={labels} />
             ) : null;
           })}
 
@@ -139,21 +145,26 @@ export function CampusScene({ network, mode = 'app', selected = null, onSelect, 
                     donor={a}
                     recipient={b}
                     animate={animate}
+                    showLabel={showLabels}
+                    labels={labels}
                   />
                 )}
               </group>
             );
           })}
 
-          {animate && <Sparkles count={70} scale={[26, 5, 26]} position={[0, 2.5, 0]} size={2.2} speed={0.25} color="#fcd581" opacity={0.35} />}
+          {animate && <Sparkles count={70} scale={[26, 5, 26]} position={[0, 2.5, 0]} size={2} speed={0.25} color="#e8862a" opacity={0.28} />}
         </Suspense>
 
         <Rig mode={mode} animate={animate} />
+        <LabelProjector store={labels} />
         <EffectComposer multisampling={0}>
-          <Bloom mipmapBlur intensity={0.9} luminanceThreshold={0.42} luminanceSmoothing={0.2} radius={0.6} />
-          <Vignette eskil={false} offset={0.25} darkness={0.75} />
+          <Bloom mipmapBlur intensity={0.3} luminanceThreshold={0.9} luminanceSmoothing={0.15} radius={0.5} />
+          <Vignette eskil={false} offset={0.4} darkness={0.18} />
         </EffectComposer>
       </Canvas>
+      <LabelOverlay store={labels} />
+      </div>
     </div>
   );
 }
@@ -175,6 +186,14 @@ function Rig({ mode, animate }: { mode: 'hero' | 'app'; animate: boolean }) {
       cam.clearViewOffset();
     }
   }, [camera, mode, size.width, size.height]);
+
+  // portrait screens (phones) have a narrow horizontal field of view: pull the camera back so the campus fits
+  useEffect(() => {
+    if (mode !== 'app' || size.height === 0) return;
+    const pullBack = Math.min(1.8, Math.max(1, (0.9 * size.height) / size.width));
+    camera.position.copy(to).multiplyScalar(pullBack);
+    controls.current?.update();
+  }, [camera, mode, to, size.width, size.height]);
 
   useFrame((_, dt) => {
     if (intro.current < 1) {

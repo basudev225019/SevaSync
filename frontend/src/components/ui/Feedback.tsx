@@ -5,7 +5,7 @@ import { ApiError } from '../../services/api';
 import { Button } from './Button';
 
 export function Skeleton({ className }: { className?: string }) {
-  return <div className={clsx('animate-pulse rounded-2xl bg-white/[0.04]', className)} />;
+  return <div className={clsx('animate-pulse rounded-2xl bg-wash/[0.04]', className)} />;
 }
 
 export function EmptyState({ icon, title, children, action }: {
@@ -15,8 +15,8 @@ export function EmptyState({ icon, title, children, action }: {
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-white/8 px-6 py-14 text-center">
-      <div className="mb-4 grid size-12 place-items-center rounded-2xl bg-white/5 text-ink-300">
+    <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-wash/8 px-6 py-14 text-center">
+      <div className="mb-4 grid size-12 place-items-center rounded-2xl bg-wash/5 text-ink-300">
         {icon ?? <Inbox className="size-5" />}
       </div>
       <h3 className="text-base font-semibold">{title}</h3>
@@ -29,8 +29,8 @@ export function EmptyState({ icon, title, children, action }: {
 export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
   const message = error instanceof ApiError ? error.message : 'Something went wrong while loading this.';
   return (
-    <div className="flex items-start gap-3 rounded-2xl border border-rose-400/20 bg-rose-500/5 p-4 text-sm text-rose-100">
-      <AlertTriangle className="mt-0.5 size-4 shrink-0 text-rose-300" />
+    <div className="flex items-start gap-3 rounded-2xl border border-rose-400/20 bg-rose-500/5 p-4 text-sm text-rose-700">
+      <AlertTriangle className="mt-0.5 size-4 shrink-0 text-rose-700" />
       <div className="flex-1">{message}</div>
       {onRetry && (
         <Button size="sm" variant="ghost" onClick={onRetry}>

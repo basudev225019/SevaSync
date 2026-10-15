@@ -22,7 +22,7 @@ export default function DonateView() {
         title="What's left over?"
         description="Thirty seconds now saves a meal later. The safety check runs as you type."
       />
-      <div className="grid gap-6 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
         <Card className="lg:col-span-3">
           <BatchForm onDone={() => navigate('/app/batches')} />
         </Card>
@@ -31,7 +31,7 @@ export default function DonateView() {
           <ul className="space-y-4">
             {RULES.map((r) => (
               <li key={r.title} className="flex gap-3">
-                <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-xl bg-white/5 text-saffron-300">{r.icon}</span>
+                <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-xl bg-wash/5 text-saffron-600">{r.icon}</span>
                 <div>
                   <p className="text-sm font-semibold text-ink-100">{r.title}</p>
                   <p className="mt-0.5 text-sm text-ink-400">{r.text}</p>

@@ -80,10 +80,11 @@ export default function Register() {
     <AuthLayout
       wide
       title="Join SevaSync"
-      subtitle={<>Already registered? <Link to="/login" className="font-semibold text-saffron-300 hover:underline">Sign in</Link></>}
+      subtitle={<>Already registered? <Link to="/login" className="font-semibold text-saffron-600 hover:underline">Sign in</Link></>}
     >
-      {error && <p className="mb-4 rounded-xl border border-rose-400/20 bg-rose-500/10 px-3 py-2 text-sm text-rose-200" role="alert">{error}</p>}
+      {error && <p className="mb-4 rounded-xl border border-rose-400/20 bg-rose-500/10 px-3 py-2 text-sm text-rose-700" role="alert">{error}</p>}
       <Stepper
+        theme="light"
         step={step}
         onStepChange={setStep}
         onFinalStepCompleted={submit}
@@ -96,7 +97,7 @@ export default function Register() {
       >
         <Step title="Role">
           <p className="mb-4 text-sm text-ink-400">How will you take part?</p>
-          <div className="grid gap-2.5">
+          <div className="grid grid-cols-1 gap-2.5">
             {ROLES.map((r) => {
               const active = r.id === role;
               return (
@@ -105,7 +106,7 @@ export default function Register() {
                   type="button"
                   onClick={() => setRole(r.id)}
                   aria-pressed={active}
-                  className={clsx('flex items-center gap-4 rounded-2xl border p-4 text-left transition', active ? 'bg-white/[0.06]' : 'border-white/8 hover:bg-white/[0.03]')}
+                  className={clsx('flex items-center gap-4 rounded-2xl border p-4 text-left transition', active ? 'bg-wash/[0.06]' : 'border-wash/8 hover:bg-wash/[0.03]')}
                   style={active ? { borderColor: `${roleColor[r.id]}66`, boxShadow: `0 0 0 4px ${roleColor[r.id]}14` } : undefined}
                 >
                   <span className="grid size-11 shrink-0 place-items-center rounded-xl" style={{ color: roleColor[r.id], background: `${roleColor[r.id]}1c` }}>{r.icon}</span>
@@ -121,7 +122,7 @@ export default function Register() {
         </Step>
 
         <Step title="Account">
-          <div className="grid gap-3.5 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
             <Input className="sm:col-span-2" label={role === 'VOLUNTEER' ? 'Full name' : 'Organisation name'} value={name} onChange={(e) => setName(e.target.value)} placeholder={role === 'VOLUNTEER' ? 'Priya Nair' : 'Asha Bhavan Orphanage'} maxLength={80} />
             <Input label="E-mail" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} error={email && !emailOk(email) ? 'Enter a valid e-mail' : null} />
             <Input label="Mobile" type="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="98765 43210" error={phone && !phoneOk(phone) ? '10-digit Indian mobile number' : null} />
@@ -136,7 +137,7 @@ export default function Register() {
             </Select>
           )}
           {role === 'RECIPIENT' && (
-            <div className="grid gap-3.5 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
               <Select label="Organisation type" value={recipientType} onChange={(e) => setRecipientType(e.target.value as RecipientType)}>
                 {(Object.keys(recipientTypeLabel) as RecipientType[]).map((t) => <option key={t} value={t}>{recipientTypeLabel[t]}</option>)}
               </Select>

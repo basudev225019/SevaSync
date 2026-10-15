@@ -45,10 +45,10 @@ export function DeliverModal({ dispatch, onClose, onConfirm, busy }: {
             aria-label={`${n} star${n > 1 ? 's' : ''}`}
             aria-pressed={rating === n}
           >
-            <Star className={clsx('size-8 transition', n <= shown ? 'fill-saffron-400 text-saffron-400' : 'text-ink-500')} />
+            <Star className={clsx('size-8 transition', n <= shown ? 'fill-saffron-400 text-saffron-600' : 'text-ink-500')} />
           </button>
         ))}
-        <span className="ml-3 text-sm font-semibold text-saffron-300">{words[shown]}</span>
+        <span className="ml-3 text-sm font-semibold text-saffron-600">{words[shown]}</span>
       </div>
       <TextArea className="mt-5" label="A word for the donor (optional)" value={feedback} onChange={(e) => setFeedback(e.target.value)} maxLength={280} placeholder="Still warm, the children loved it!" />
     </Modal>
